@@ -19,4 +19,6 @@ services:
       - key: APP_USER
         value: rose
       - key: APP_PASSWORD
-        sync: false       # a senha da loja
+        sync: false       # senha da primeira administradora (só usada se ainda não houver usuários)
+      - key: SESSION_SECRET
+        generateValue: true

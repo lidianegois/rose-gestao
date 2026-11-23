@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar · Rose</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>
+/* Mesma identidade do sistema: vinho #7a0f28, dourado #e5a91a, Playfair Display + Inter. Mobile first. */
+:root{color-scheme:light dark;--bg:light-dark(#fbf1f2,#160b0d);--card:light-dark(#fff,#1d0f12);--ink:light-dark(#1d1416,#f4e9ea);--mut:light-dark(#6b5d60,#b39fa3);--line:light-dark(#efe4e5,#3a2226);--g:light-dark(#8e1230,#d9536f);--band:light-dark(#7a0f28,#3f0b17);--red:light-dark(#c2410c,#ff9a6b);--gold:#e5a91a}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;display:flex;flex-direction:column}
+.top{background:var(--band);color:#fff;border-bottom:3px solid var(--gold);padding:40px 20px 72px;text-align:center}
+.mark{width:64px;height:64px;display:block;margin:0 auto 12px}
+.top h1{font:italic 700 52px/1 "Playfair Display",Georgia,serif;margin:0}
+.top p{margin:8px 0 0;color:#f7d98b;font-weight:500}
+main{flex:1;padding:0 16px 32px}
+.card{max-width:420px;margin:-48px auto 0;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px 20px;box-shadow:0 18px 48px rgba(60,10,20,.14)}
+h2{font:700 24px/1.2 "Playfair Display",Georgia,serif;margin:0 0 4px}
+.sub{color:var(--mut);margin:0 0 20px;font-size:15px}
+label{display:block;font-size:14px;font-weight:600;color:var(--mut);margin:0 0 14px}
+input{display:block;width:100%;margin-top:6px;font:inherit;font-size:17px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;min-height:52px;padding:10px 14px}
+input:focus-visible,button:focus-visible{outline:3px solid var(--g);outline-offset:2px}
+.pw{position:relative}.pw input{padding-right:84px}
+.ver{position:absolute;right:6px;bottom:6px;min-height:40px;border:0;background:none;color:var(--g);font:600 14px Inter,sans-serif;padding:0 10px;cursor:pointer}
+.go{width:100%;min-height:54px;margin-top:6px;border:0;border-radius:12px;background:var(--g);color:#fff;font:700 18px Inter,sans-serif;cursor:pointer}
+.go:disabled{opacity:.6;cursor:wait}
+.err{color:var(--red);font-weight:600;min-height:24px;margin:10px 0 0;font-size:15px}
+.help{color:var(--mut);font-size:14px;text-align:center;margin:18px 0 0}
+footer{text-align:center;color:var(--mut);font-size:13px;padding:0 16px 24px}
+@media(min-width:600px){.top{padding:56px 20px 96px}.top h1{font-size:64px}.card{padding:32px 32px 28px;margin-top:-64px}}
+</style>
+</head>
+<body>
+<header class="top">
+ <svg class="mark" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="#fff"/><circle cx="24" cy="24" r="19.5" fill="none" stroke="#e5a91a" stroke-width="1.5"/><path d="M12 15h3.5l3 13.5h13.5l2.8-9.5H17.2" fill="none" stroke="#7a0f28" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 22.5h13M20.5 25.5h11" stroke="#e5a91a" stroke-width="1.6" stroke-linecap="round"/><circle cx="20.5" cy="33" r="2" fill="#e5a91a"/><circle cx="30" cy="33" r="2" fill="#e5a91a"/></svg>
+ <h1>Rose</h1>
+ <p>Mercearia e Bazar</p>
+</header>
+<main>
+ <form class="card" id="f" novalidate>
+  <h2>Entrar no sistema</h2>
+  <p class="sub">Use o usuário e a senha que a administradora criou para você.</p>
+  <label>Usuário<input id="u" name="usuario" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
+  <label class="pw">Senha<input id="p" name="senha" type="password" autocomplete="current-password" required><button type="button" class="ver" id="ver" aria-label="Mostrar senha">Mostrar</button></label>
+  <button class="go" id="go">Entrar</button>
+  <p class="err" id="e" role="alert"></p>
+  <p class="help">Esqueceu a senha? Peça para a administradora criar uma nova.</p>
+ </form>
+</main>
+<footer>Rose Mercearia e Bazar · Tudo o que você precisa, em um só lugar.</footer>
+<script>
+{
+ const f=document.getElementById('f'),u=document.getElementById('u'),p=document.getElementById('p'),e=document.getElementById('e'),go=document.getElementById('go'),ver=document.getElementById('ver');
+ u.focus();
+ ver.addEventListener('click',()=>{const show=p.type==='password';p.type=show?'text':'password';ver.textContent=show?'Ocultar':'Mostrar';ver.setAttribute('aria-label',show?'Ocultar senha':'Mostrar senha')});
+ f.addEventListener('submit',async ev=>{
+  ev.preventDefault();e.textContent='';
+  if(!u.value.trim()||!p.value){e.textContent='Preencha usuário e senha.';return}
+  go.disabled=true;go.textContent='Entrando…';
+  try{
+   const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u.value.trim(),senha:p.value}),credentials:'same-origin'});
+   const j=await r.json().catch(()=>({}));
+   if(r.ok){location.replace('/');return}
+   e.textContent=j.error||'Não foi possível entrar.';p.select();
+  }catch(x){e.textContent='Sem conexão. Confira a internet e tente de novo.'}
+  go.disabled=false;go.textContent='Entrar';
+ });
+}
+</script>
+</body>
+</html>

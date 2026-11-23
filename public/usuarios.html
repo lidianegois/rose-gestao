@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usuários · Rose</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>
+/* Mesma identidade do sistema. Mobile first: cartões empilhados; duas colunas a partir de 900px. */
+:root{color-scheme:light dark;--bg:light-dark(#fff,#160b0d);--ink:light-dark(#1d1416,#f4e9ea);--mut:light-dark(#6b5d60,#b39fa3);--line:light-dark(#efe4e5,#3a2226);--mist:light-dark(#fbf1f2,#241215);--card:light-dark(#fff,#1d0f12);--g:light-dark(#8e1230,#d9536f);--gd:light-dark(#1f7a4d,#62d39b);--okb:light-dark(#e8f5ee,#12291d);--red:light-dark(#c2410c,#ff9a6b);--gold:#e5a91a}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif}
+.top{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line);box-shadow:inset 0 3px 0 var(--gold)}
+.tb{display:flex;align-items:center;gap:10px;padding:12px 16px;max-width:1100px;margin:0 auto}
+.brand{margin-right:auto;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}.brand svg{width:34px;height:34px}
+.brand b{font:italic 700 24px/1 "Playfair Display",Georgia,serif;color:var(--g)}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 40px}
+h1{font:700 28px/1.15 "Playfair Display",Georgia,serif;margin:0 0 6px}h2{font:700 20px/1.2 "Playfair Display",Georgia,serif;margin:0 0 12px}
+.lead{color:var(--mut);margin:0 0 20px}
+.grid{display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin:0 0 12px}
+input,select{display:block;width:100%;margin-top:4px;font:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:46px;padding:8px 12px}
+.btn{font:inherit;font-weight:600;min-height:44px;padding:8px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.btn.pri{background:var(--g);border-color:var(--g);color:#fff}.btn.sm{min-height:38px;padding:6px 12px;font-size:14px}.btn.dng{color:var(--red)}
+input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid var(--g);outline-offset:2px}
+.user{border-bottom:1px solid var(--line);padding:14px 0}.user:last-child{border-bottom:0}
+.uh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.uh b{font-size:17px}.uh small{display:block;color:var(--mut);font-size:13px}
+.bd{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;white-space:nowrap;margin-left:4px}
+.bd.adm{background:light-dark(#fbe7ea,#3a1218);color:var(--g)}.bd.op{background:light-dark(#eef1f4,#16241d);color:var(--mut)}.bd.off{background:light-dark(#fdecea,#3a1712);color:var(--red)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.inline{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;background:var(--mist);border-radius:12px;padding:10px}.inline label{flex:1 1 200px;margin:0}
+.msg{font-weight:600;min-height:22px;margin:8px 0 0}.msg.ok{color:var(--gd)}.msg.err{color:var(--red)}
+.note{background:var(--mist);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--mut)}
+@media(min-width:900px){.grid{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:start}h1{font-size:32px}}
+</style>
+</head>
+<body>
+<header class="top"><div class="tb">
+ <a class="brand" href="/" aria-label="Voltar ao sistema"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="var(--g)"/><circle cx="24" cy="24" r="19.5" fill="none" stroke="var(--gold)" stroke-width="1.5"/><path d="M12 15h3.5l3 13.5h13.5l2.8-9.5H17.2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 22.5h13M20.5 25.5h11" stroke="var(--gold)" stroke-width="1.6" stroke-linecap="round"/><circle cx="20.5" cy="33" r="2" fill="var(--gold)"/><circle cx="30" cy="33" r="2" fill="var(--gold)"/></svg><b>Rose</b></a>
+ <a class="btn sm" href="/">Voltar ao sistema</a>
+</div></header>
+<main class="wrap">
+ <h1>Usuários</h1>
+ <p class="lead">Quem pode entrar no sistema. Cada pessoa tem o próprio usuário e senha, e as vendas e os caixas ficam com o nome de quem registrou.</p>
+ <div class="grid">
+  <section class="card"><h2>Pessoas cadastradas</h2><div id="lista"><p class="lead">Carregando…</p></div></section>
+  <div>
+   <form class="card" id="novo" novalidate style="margin-bottom:16px">
+    <h2>Novo usuário</h2>
+    <label>Nome<input name="nome" maxlength="60" placeholder="Ex.: Camila Souza" required></label>
+    <label>Usuário para entrar<input name="usuario" maxlength="30" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Ex.: camila" required></label>
+    <label>Senha inicial (mínimo 8 caracteres)<input name="senha" type="text" minlength="8" autocomplete="new-password" required></label>
+    <label>Permissão<select name="papel"><option value="operador">Operador: usa o sistema</option><option value="admin">Administradora: usa o sistema e cuida dos usuários</option></select></label>
+    <button class="btn pri" style="width:100%">Criar usuário</button>
+    <p class="msg" id="novo-msg" role="status"></p>
+   </form>
+   <form class="card" id="minha" novalidate>
+    <h2>Minha senha</h2>
+    <label>Senha atual<input name="atual" type="password" autocomplete="current-password"></label>
+    <label>Nova senha (mínimo 8 caracteres)<input name="nova" type="password" autocomplete="new-password"></label>
+    <button class="btn" style="width:100%">Trocar minha senha</button>
+    <p class="msg" id="minha-msg" role="status"></p>
+   </form>
+   <p class="note" style="margin-top:16px">Para tirar o acesso de alguém, use <b>Desativar</b>: a pessoa sai do sistema na hora, e o histórico do que ela registrou continua guardado.</p>
+  </div>
+ </div>
+</main>
+<script>
+{
+ const $=s=>document.querySelector(s);
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const dt=s=>s?new Date(s).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'nunca';
+ let ME=null,LIST=[],OPEN='';
+ async function api(method,url,body){const r=await fetch(url,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});if(r.status===401){location.replace('/login');throw new Error('sessão')}const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Erro '+r.status);return j}
+ function render(){
+  $('#lista').innerHTML=LIST.map(u=>`<div class="user" data-id="${esc(u.id)}">
+   <div class="uh"><div><b>${esc(u.name)}</b>${u.role==='admin'?'<span class="bd adm">Administradora</span>':'<span class="bd op">Operador</span>'}${u.active?'':'<span class="bd off">Desativado</span>'}<small>usuário: ${esc(u.username)} · último acesso: ${dt(u.last_login)}${u.id===ME.id?' · você':''}</small></div></div>
+   <div class="acts"><button type="button" class="btn sm" data-a="senha">Nova senha</button><button type="button" class="btn sm" data-a="nome">Mudar nome</button>${u.id===ME.id?'':`<button type="button" class="btn sm" data-a="papel">${u.role==='admin'?'Tornar operador':'Tornar administradora'}</button><button type="button" class="btn sm ${u.active?'dng':''}" data-a="ativo">${u.active?'Desativar':'Reativar'}</button>`}</div>
+   ${OPEN===u.id+':senha'?`<form class="inline" data-f="senha"><label>Nova senha para ${esc(u.name)}<input name="v" type="text" minlength="8" autocomplete="new-password"></label><button class="btn pri sm">Salvar</button><button type="button" class="btn sm" data-a="fechar">Cancelar</button></form>`:''}
+   ${OPEN===u.id+':nome'?`<form class="inline" data-f="nome"><label>Nome<input name="v" maxlength="60" value="${esc(u.name)}"></label><button class="btn pri sm">Salvar</button><button type="button" class="btn sm" data-a="fechar">Cancelar</button></form>`:''}
+   <p class="msg" data-msg></p></div>`).join('');
+  const f=$('#lista form input');f&&f.focus();
+ }
+ function msg(el,t,ok){el.textContent=t;el.className='msg '+(ok?'ok':'err')}
+ async function load(){const [me,l]=await Promise.all([api('GET','/api/me'),api('GET','/api/usuarios')]);ME=me.user;LIST=l.users;render()}
+ $('#lista').addEventListener('click',async ev=>{const b=ev.target.closest('[data-a]');if(!b)return;const box=b.closest('.user'),id=box.dataset.id,u=LIST.find(x=>x.id===id),a=b.dataset.a,m=box.querySelector('[data-msg]');
+  if(a==='fechar'){OPEN='';return render()}
+  if(a==='senha'||a==='nome'){OPEN=id+':'+a;return render()}
+  try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),a==='papel'?{papel:u.role==='admin'?'operador':'admin'}:{ativo:!u.active});LIST=LIST.map(x=>x.id===id?r.user:x);render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),a==='ativo'?(r.user.active?'Acesso liberado.':'Acesso bloqueado: a pessoa saiu do sistema.'):'Permissão alterada.',true)}catch(x){msg(m,x.message)}});
+ $('#lista').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,box=f.closest('.user'),id=box.dataset.id,m=box.querySelector('[data-msg]'),v=f.v.value;
+  try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),f.dataset.f==='senha'?{senha:v}:{nome:v});LIST=LIST.map(x=>x.id===id?r.user:x);OPEN='';render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),f.dataset.f==='senha'?'Senha trocada. Passe a nova senha para a pessoa.':'Nome alterado.',true)}catch(x){msg(m,x.message)}});
+ $('#novo').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,m=$('#novo-msg');
+  try{const r=await api('POST','/api/usuarios',{nome:f.nome.value,usuario:f.usuario.value,senha:f.senha.value,papel:f.papel.value});LIST.push(r.user);render();msg(m,`Usuário “${r.user.username}” criado. Passe o usuário e a senha para ${r.user.name}.`,true);f.reset()}catch(x){msg(m,x.message)}});
+ $('#novo').usuario.addEventListener('input',e=>{e.target.value=e.target.value.toLowerCase().replace(/\s+/g,'')});
+ $('#minha').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,m=$('#minha-msg');
+  try{await api('POST','/api/senha',{atual:f.atual.value,nova:f.nova.value});msg(m,'Sua senha foi trocada.',true);f.reset()}catch(x){msg(m,x.message)}});
+ load().catch(x=>{$('#lista').innerHTML=`<p class="msg err">${esc(x.message)}</p>`});
+}
+</script>
+</body>
+</html>

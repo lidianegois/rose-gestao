@@ -14,14 +14,17 @@ Sistema da loja: caixa, vendas, fiado, produtos, estoque com lote e validade, no
 | Banco de dados | **PostgreSQL**, com a tabela `app_docs` (JSONB) (`storage.js` e `db/schema.sql`). Sem `DATABASE_URL`, grava no arquivo `data/banco-local.json`, que serve só para testes. |
 | Ligação site ↔ banco | `public/db-adapter.js`. O site foi feito para o armazenamento do claude.ai; este arquivo oferece a mesma interface falando com o servidor. Por isso o `index.html` é o mesmo do site original, com uma única linha a mais, que carrega o adaptador. |
 | Dependência | só `pg` (driver do PostgreSQL). |
-| Segurança | senha opcional (`APP_PASSWORD`) que protege o site e os dados. |
+| Segurança | página de entrada (`/login`) com contas de usuário (administradora ou operador), senhas guardadas só como hash scrypt, sessão por cookie seguro (HttpOnly, 30 dias), bloqueio após 10 tentativas erradas em 15 minutos. |
 
 ## 2. Arquivos
 
 ```
 rose-gestao/
 ├── public/
-│   ├── index.html        ← o site completo (visual e funções intactos)
+│   ├── index.html        ← o site completo
+│   ├── login.html        ← página de entrada
+│   ├── usuarios.html     ← cadastro de usuários (só administradora)
+│   ├── sessao.js         ← mostra quem está conectado e o botão Sair
 │   └── db-adapter.js     ← liga o site ao servidor
 ├── db/
 │   └── schema.sql        ← cria a tabela no PostgreSQL (o servidor roda sozinho)
@@ -155,3 +158,13 @@ O banco do Render começa vazio. Os dados do site no claude.ai **não passam soz
 **Como atualizar o site:** envie as mudanças para a branch `main` e, no painel do Render, clique em **Manual Deploy › Deploy latest commit**. Para publicar sozinho a cada envio, conecte o GitHub em Render › Account Settings › Git providers.
 
 **Depois de atualizar:** recarregue a página de verdade (F5). Só trocar de aba no menu não baixa a versão nova.
+
+## 9. Usuários e acesso
+
+- **Entrada:** `/login`. Quem não entrou é levado para lá.
+- **Primeira administradora:** criada sozinha na primeira vez que o servidor sobe, com `APP_USER` e `APP_PASSWORD`. Depois disso essas variáveis não mudam mais nada: as senhas passam a ser trocadas pela tela **Usuários**.
+- **Administradora:** usa o sistema e, em **Usuários** (link no topo, ou Mais › Usuários e senhas no celular), cria contas, troca senhas, muda permissões e desativa pessoas.
+- **Operador:** usa todo o sistema, mas não vê a tela de usuários.
+- **Desativar** tira o acesso na hora, sem apagar o histórico. Não existe exclusão de usuários.
+- Cada venda e cada abertura de caixa guardam o nome de quem estava conectado ("Registrada por", nos detalhes da venda).
+- **`SESSION_SECRET`:** chave que assina as sessões. Sem ela, todos saem do sistema quando o servidor reinicia.

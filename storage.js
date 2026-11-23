@@ -47,6 +47,19 @@ function pgStore(url) {
       );
       return String(r.rows[0].v);
     },
+    async users() {
+      const r = await pool.query('SELECT id, username, name, pass, role, active, pwv, created_at, last_login FROM app_users ORDER BY created_at');
+      return r.rows;
+    },
+    async createUser(u) {
+      await pool.query('INSERT INTO app_users (id, username, name, pass, role, active, pwv) VALUES ($1,$2,$3,$4,$5,$6,$7)', [u.id, u.username, u.name, u.pass, u.role, u.active, u.pwv]);
+    },
+    async updateUser(id, f) {
+      const keys = Object.keys(f).filter((k) => ['name', 'pass', 'role', 'active', 'pwv', 'last_login'].includes(k));
+      if (!keys.length) return;
+      const sets = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+      await pool.query(`UPDATE app_users SET ${sets} WHERE id = $1`, [id, ...keys.map((k) => f[k])]);
+    },
     async remove(col, id) {
       await pool.query('DELETE FROM app_docs WHERE col = $1 AND id = $2', [col, id]);
       const r = await pool.query("SELECT nextval('app_docs_rev') AS v");
@@ -87,6 +100,24 @@ function fileStore(dir) {
         state.rev++;
         save();
         return String(state.rev);
+      });
+    },
+    async users() {
+      return (state.users || []).map((u) => ({ ...u }));
+    },
+    createUser(u) {
+      return serial(() => {
+        state.users = state.users || [];
+        if (state.users.some((x) => x.username === u.username)) throw Object.assign(new Error('duplicado'), { code: '23505' });
+        state.users.push({ ...u, created_at: new Date().toISOString(), last_login: null });
+        save();
+      });
+    },
+    updateUser(id, f) {
+      return serial(() => {
+        const u = (state.users || []).find((x) => x.id === id);
+        if (u) Object.assign(u, f);
+        save();
       });
     },
     remove(col, id) {

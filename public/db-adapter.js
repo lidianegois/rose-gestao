@@ -30,7 +30,8 @@
     }
     return fetch(url, opts).then(
       function (r) {
-        if (r.status === 401 || r.status === 403) throw dbError('invalid_argument', 'Sem permissão para gravar.');
+        if (r.status === 401) { location.replace('/login'); throw dbError('invalid_argument', 'Sessão encerrada. Entre de novo.'); }
+        if (r.status === 403) throw dbError('invalid_argument', 'Sem permissão para gravar.');
         if (r.status === 413) throw dbError('invalid_argument', 'Documento grande demais.');
         if (r.status >= 500) throw dbError('unavailable', 'Servidor indisponível (HTTP ' + r.status + ').');
         if (!r.ok) throw dbError('invalid_argument', 'Pedido recusado (HTTP ' + r.status + ').');
