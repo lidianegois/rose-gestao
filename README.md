@@ -142,3 +142,16 @@ O banco do Render começa vazio. Os dados do site no claude.ai **não passam soz
 | Comandos SQL testados num PostgreSQL 16 | ok |
 | Conexão do servidor com o PostgreSQL pelo driver `pg` | não executada no teste (o driver não pôde ser instalado aqui); confira no primeiro deploy: o log deve mostrar `armazenamento: PostgreSQL` |
 | `package-lock.json` | não incluído: será gerado no primeiro `npm install` |
+
+## 8. Publicação atual
+
+| Item | Valor |
+|---|---|
+| Site | https://rose-gestao.onrender.com (Render, plano Free, região Virgínia) |
+| Banco | Supabase, projeto `rose-gestao` (`wzxibciutvfdstkzkwvd`), região us-east-1, esquema `rose`, usuário `rose_app` (sem poderes de administrador) |
+| Conexão | pooler de sessão do Supabase (`aws-1-us-east-1.pooler.supabase.com:5432`) com SSL |
+| Código | https://github.com/lidianegois/rose-gestao, branch `main` |
+
+**Como atualizar o site:** envie as mudanças para a branch `main` e, no painel do Render, clique em **Manual Deploy › Deploy latest commit**. Para publicar sozinho a cada envio, conecte o GitHub em Render › Account Settings › Git providers.
+
+**Depois de atualizar:** recarregue a página de verdade (F5). Só trocar de aba no menu não baixa a versão nova.
