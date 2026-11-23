@@ -1,0 +1,17 @@
+{
+  "name": "rose-gestao",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de gestão da Rose Mercearia e Bazar: caixa, vendas, fiado, estoque, notas fiscais, compras e financeiro.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}

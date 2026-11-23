@@ -1,0 +1,22 @@
+# Blueprint do Render: cria o site (Web Service Node).
+# O banco PostgreSQL é externo (Supabase, Neon, ou um Postgres do Render criado à parte):
+# o Render pede o DATABASE_URL e a APP_PASSWORD na hora de criar.
+services:
+  - type: web
+    name: rose-gestao
+    runtime: node
+    plan: free            # troque para "starter" para o site não "dormir"
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false       # cole o endereço do banco (postgres://...)
+      - key: PGSSL
+        value: "true"     # "true" para bancos externos; "false" se usar a Internal URL de um Postgres do Render
+      - key: APP_USER
+        value: rose
+      - key: APP_PASSWORD
+        sync: false       # a senha da loja
