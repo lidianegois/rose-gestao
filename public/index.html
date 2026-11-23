@@ -728,7 +728,14 @@ function openM(title,body,o={}){M=o;$('#dt').textContent=title;$('#db').innerHTM
  $('#dfoot').innerHTML=(o.left||'')+(o.submit===null?'<button type="button" class="btn pri" data-act="close">Fechar</button>':`<button type="button" class="btn ghost" data-act="close">Cancelar</button><button type="submit" class="btn ${o.danger?'dng':'pri'}">${o.submit||'Salvar'}</button>`);
  if(dlg.showModal){if(!dlg.open)dlg.showModal()}else dlg.setAttribute('open','');
  o.onInput&&o.onInput(dform,null);const f=$('#db').querySelector('input:not([type=hidden]),select');f&&f.focus()}
-function closeM(){if(dlg.close)dlg.close();else dlg.removeAttribute('open');M={}}
+let PEND=null,inflight=new Set();
+/* junta os dados que chegaram do servidor com as alterações locais ainda não gravadas (essas têm prioridade) */
+function applyRemote(docs){const R=fromDocs(docs),keep=new Set([...dirty,...inflight]);
+ for(const k of keep){if(k==='cadastros'){R.clientes=S.clientes;R.produtos=S.produtos;R.fornecedores=S.fornecedores;R.seq=S.seq;R.config=S.config}
+  else if(k.startsWith('vendas-')||k.startsWith('notas-')){const f=k.startsWith('vendas-')?'vendas':'notas',m=k.slice(f.length+1);R[f]=R[f].filter(v=>v.data.slice(0,7)!==m).concat(S[f].filter(v=>v.data.slice(0,7)===m))}
+  else if(Array.isArray(R[k]))R[k]=S[k]}
+ S=R}
+function closeM(){if(dlg.close)dlg.close();else dlg.removeAttribute('open');M={};if(PEND){const p=PEND;PEND=null;applyRemote(p.docs);render()}}
 dform.addEventListener('submit',e=>{e.preventDefault();if(!M.onSubmit)return closeM();const r=M.onSubmit(new FormData(dform),dform);if(typeof r==='string'){$('#derr').textContent=r}else closeM()});
 dform.addEventListener('input',e=>M.onInput&&M.onInput(dform,e));
 dform.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.dataset&&e.target.dataset.bar!==undefined){e.preventDefault();const v=e.target.value.trim();if(v&&M.onBar){$('#derr').textContent='';M.onBar(v,dform);e.target.value=''}}});
@@ -987,7 +994,7 @@ function body(k){if(k==='caixas')return{items:S.caixas};if(k==='cadastros')retur
 async function flush(){
  if(!db){try{localStorage.setItem('loja-estado',JSON.stringify(S));setSt('Salvo neste navegador')}catch(e){setSt('Não salvo')}dirty.clear();return}
  if(saving)return;saving=true;
- try{while(dirty.size){const k=dirty.values().next().value;dirty.delete(k);const b=body(k),ref=col.doc(k);try{if(b){await ref.set(JSON.parse(JSON.stringify(b)));remote.add(k)}else if(remote.has(k)){await ref.delete();remote.delete(k)}}catch(e){if(e&&e.code==='unavailable'){await new Promise(r=>setTimeout(r,800+Math.random()*800));dirty.add(k)}else throw e}}setSt('Tudo salvo')}
+ try{while(dirty.size){const k=dirty.values().next().value;dirty.delete(k);inflight.add(k);const b=body(k),ref=col.doc(k);try{if(b){await ref.set(JSON.parse(JSON.stringify(b)));remote.add(k)}else if(remote.has(k)){await ref.delete();remote.delete(k)}}catch(e){if(e&&e.code==='unavailable'){await new Promise(r=>setTimeout(r,800+Math.random()*800));dirty.add(k)}else throw e}finally{inflight.delete(k)}}setSt('Tudo salvo')}
  catch(e){const c=e&&e.code;setSt('Erro ao salvar');toast(c==='invalid_argument'?'Você não tem permissão para alterar os dados desta página.':c==='quota_exceeded'?'O espaço de dados está cheio. Exclua registros antigos.':'Não foi possível salvar agora. Tente novamente.')}
  saving=false;if(dirty.size)flush();
 }
@@ -1003,7 +1010,7 @@ render();
  db=d;col=db.collection('loja');setSt('Conectando…');
  const to=setTimeout(()=>{if(!loaded){loaded=true;render()}setSt('Sem conexão: os dados podem estar desatualizados')},10000);
  col.onSnapshot(snap=>{if(!snap.metadata.fromCache){clearTimeout(to);if(!dirty.size&&!saving)setSt('Tudo salvo')}remote=new Set(snap.docs.map(x=>x.id));
-  if(dirty.size||saving)return;S=fromDocs(snap.docs);loaded=true;render()},
+  if(loaded&&dlg.open){PEND=snap;return}PEND=null;if(loaded&&(dirty.size||saving||inflight.size))applyRemote(snap.docs);else S=fromDocs(snap.docs);loaded=true;render()},
   ()=>{clearTimeout(to);loaded=true;setSt('Dados indisponíveis no momento');render()});
 })();
 }

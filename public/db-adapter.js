@@ -57,6 +57,7 @@
     var lastVersion = null;
     var timer = null;
     var busy = false;
+    var writeSeq = 0; // sobe a cada gravação: uma leitura que começou antes dela é descartada
 
     function emit(list) {
       var docs = list.map(function (d) { return docSnap(d.id, d.data); });
@@ -68,10 +69,12 @@
       if (busy || !listeners.length) return;
       if (!force && document.hidden) return;
       busy = true;
+      var seq = writeSeq;
       request('GET', base + '/_version')
         .then(function (v) {
           if (!force && v.version === lastVersion) return;
           return request('GET', base).then(function (all) {
+            if (seq !== writeSeq) { lastVersion = null; return; } // dados podem estar velhos
             lastVersion = all.version;
             emit(all.docs);
           });
@@ -102,7 +105,8 @@
         },
         set: function (data) {
           if (!data || typeof data !== 'object' || Array.isArray(data)) return Promise.reject(dbError('invalid_argument', 'O documento precisa ser um objeto.'));
-          return request('PUT', url, data).then(function () { soon(); });
+          writeSeq++;
+          return request('PUT', url, data).then(function () { writeSeq++; soon(); });
         },
         update: function (data) {
           return this.get().then(function (s) {
@@ -111,7 +115,8 @@
           }).then(function () { soon(); });
         },
         delete: function () {
-          return request('DELETE', url).then(function () { soon(); });
+          writeSeq++;
+          return request('DELETE', url).then(function () { writeSeq++; soon(); });
         },
       };
     }
