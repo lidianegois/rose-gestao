@@ -178,3 +178,12 @@ O banco do Render começa vazio. Os dados do site no claude.ai **não passam soz
 - **Desativar** tira o acesso na hora, sem apagar o histórico. Não existe exclusão de usuários.
 - Cada venda e cada abertura de caixa guardam o nome de quem estava conectado ("Registrada por", nos detalhes da venda).
 - **`SESSION_SECRET`:** chave que assina as sessões. Sem ela, todos saem do sistema quando o servidor reinicia.
+
+## 10. PDV (tela Caixa)
+
+- Leitor de código de barras ou busca por nome; `3*código` lança várias unidades de uma vez; categorias para toque rápido.
+- Desconto em R$ ou %, pagamento em uma forma ou **dividido** (ex.: Pix + dinheiro, com troco e parte no fiado).
+- Vendas em espera (F6) guardadas no navegador do aparelho; retomar a qualquer momento.
+- Cupom não fiscal para imprimir (80 mm) na venda concluída e na lista de vendas do caixa.
+- Atalhos: F2 buscar, F4 desconto, F6 espera, F9 finalizar, Delete remove o último item. "Tela cheia" no computador.
+- Vendas com mais de uma forma gravam `pgs: [[forma, valor], ...]`; `pag` guarda a forma principal.
