@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Usuários · Rose</title>
+<title>Usuários e perfis · Rose</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
 <style>
@@ -29,7 +29,9 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
 .uh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
 .uh b{font-size:17px}.uh small{display:block;color:var(--mut);font-size:13px}
 .bd{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;white-space:nowrap;margin-left:4px}
-.bd.adm{background:light-dark(#fbe7ea,#3a1218);color:var(--g)}.bd.op{background:light-dark(#eef1f4,#16241d);color:var(--mut)}.bd.off{background:light-dark(#fdecea,#3a1712);color:var(--red)}
+.bd.admin{background:light-dark(#fbe7ea,#3a1218);color:var(--g)}.bd.gerente{background:light-dark(#fff3dc,#33240a);color:light-dark(#8a5a00,#f2b450)}.bd.caixa{background:light-dark(#eef1f4,#16241d);color:var(--mut)}
+.mx{width:100%;border-collapse:collapse;font-size:14px}.mx th,.mx td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}.mx th:first-child,.mx td:first-child{text-align:left}.mx th{font-size:12px;color:var(--mut);font-weight:600}.sim{color:var(--gd);font-weight:700}.nao{color:var(--mut)}
+.rsel{display:inline-block;width:auto;min-height:38px;margin:0;padding:4px 10px;font-size:14px}.bd.off{background:light-dark(#fdecea,#3a1712);color:var(--red)}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .inline{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;background:var(--mist);border-radius:12px;padding:10px}.inline label{flex:1 1 200px;margin:0}
 .msg{font-weight:600;min-height:22px;margin:8px 0 0}.msg.ok{color:var(--gd)}.msg.err{color:var(--red)}
@@ -43,8 +45,8 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
  <a class="btn sm" href="/">Voltar ao sistema</a>
 </div></header>
 <main class="wrap">
- <h1>Usuários</h1>
- <p class="lead">Quem pode entrar no sistema. Cada pessoa tem o próprio usuário e senha, e as vendas e os caixas ficam com o nome de quem registrou.</p>
+ <h1>Usuários e perfis</h1>
+ <p class="lead">Quem pode entrar no sistema e o que cada um acessa. O perfil decide quais telas aparecem no menu lateral e o que a pessoa pode alterar.</p>
  <div class="grid">
   <section class="card"><h2>Pessoas cadastradas</h2><div id="lista"><p class="lead">Carregando…</p></div></section>
   <div>
@@ -53,7 +55,7 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
     <label>Nome<input name="nome" maxlength="60" placeholder="Ex.: Camila Souza" required></label>
     <label>Usuário para entrar<input name="usuario" maxlength="30" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Ex.: camila" required></label>
     <label>Senha inicial (mínimo 8 caracteres)<input name="senha" type="text" minlength="8" autocomplete="new-password" required></label>
-    <label>Permissão<select name="papel"><option value="operador">Operador: usa o sistema</option><option value="admin">Administradora: usa o sistema e cuida dos usuários</option></select></label>
+    <label>Perfil<select name="papel"><option value="caixa">Caixa</option><option value="gerente">Gerente</option><option value="admin">Administradora</option></select></label>
     <button class="btn pri" style="width:100%">Criar usuário</button>
     <p class="msg" id="novo-msg" role="status"></p>
    </form>
@@ -64,6 +66,7 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
     <button class="btn" style="width:100%">Trocar minha senha</button>
     <p class="msg" id="minha-msg" role="status"></p>
    </form>
+   <section class="card" style="margin-top:16px"><h2>O que cada perfil acessa</h2><div id="matriz"><p class="lead">Carregando…</p></div></section>
    <p class="note" style="margin-top:16px">Para tirar o acesso de alguém, use <b>Desativar</b>: a pessoa sai do sistema na hora, e o histórico do que ela registrou continua guardado.</p>
   </div>
  </div>
@@ -73,23 +76,29 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
  const $=s=>document.querySelector(s);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const dt=s=>s?new Date(s).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'nunca';
- let ME=null,LIST=[],OPEN='';
+ let ME=null,LIST=[],OPEN='',PERFIS=[],LBL={};
+ const TL={painel:'Painel',caixa:'Caixa',vendas:'Vendas',clientes:'Clientes e fiado',produtos:'Produtos',movimentacoes:'Entradas e saídas',notas:'Notas fiscais',compras:'Compras',fornecedores:'Fornecedores',financeiro:'Financeiro',analise:'Análise'};
+ function matriz(){const linhas=Object.keys(TL).map(k=>[TL[k],PERFIS.map(p=>p.tabs.includes(k))]).concat([['Usuários e perfis',PERFIS.map(p=>p.users)],['Backup e apagar dados',PERFIS.map(p=>p.data)]]);
+  document.getElementById('matriz').innerHTML=`<table class="mx"><thead><tr><th>Tela</th>${PERFIS.map(p=>`<th>${esc(p.label)}</th>`).join('')}</tr></thead><tbody>${linhas.map(([t,v])=>`<tr><td>${esc(t)}</td>${v.map(x=>x?'<td class="sim">Sim</td>':'<td class="nao">—</td>').join('')}</tr>`).join('')}</tbody></table><p class="lead" style="margin:10px 0 0;font-size:13px">O perfil Caixa também não pode excluir vendas nem clientes.</p>`}
  async function api(method,url,body){const r=await fetch(url,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});if(r.status===401){location.replace('/login');throw new Error('sessão')}const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Erro '+r.status);return j}
  function render(){
   $('#lista').innerHTML=LIST.map(u=>`<div class="user" data-id="${esc(u.id)}">
-   <div class="uh"><div><b>${esc(u.name)}</b>${u.role==='admin'?'<span class="bd adm">Administradora</span>':'<span class="bd op">Operador</span>'}${u.active?'':'<span class="bd off">Desativado</span>'}<small>usuário: ${esc(u.username)} · último acesso: ${dt(u.last_login)}${u.id===ME.id?' · você':''}</small></div></div>
-   <div class="acts"><button type="button" class="btn sm" data-a="senha">Nova senha</button><button type="button" class="btn sm" data-a="nome">Mudar nome</button>${u.id===ME.id?'':`<button type="button" class="btn sm" data-a="papel">${u.role==='admin'?'Tornar operador':'Tornar administradora'}</button><button type="button" class="btn sm ${u.active?'dng':''}" data-a="ativo">${u.active?'Desativar':'Reativar'}</button>`}</div>
+   <div class="uh"><div><b>${esc(u.name)}</b><span class="bd ${esc(u.role)}">${esc(LBL[u.role]||u.role)}</span>${u.active?'':'<span class="bd off">Desativado</span>'}<small>usuário: ${esc(u.username)} · último acesso: ${dt(u.last_login)}${u.id===ME.id?' · você':''}</small></div></div>
+   <div class="acts"><button type="button" class="btn sm" data-a="senha">Nova senha</button><button type="button" class="btn sm" data-a="nome">Mudar nome</button>${u.id===ME.id?'':`<label style="margin:0"><span class="sr" style="position:absolute;left:-9999px">Perfil de ${esc(u.name)}</span><select class="rsel" data-a="papel">${PERFIS.map(p=>`<option value="${esc(p.id)}"${p.id===u.role?' selected':''}>${esc(p.label)}</option>`).join('')}</select></label><button type="button" class="btn sm ${u.active?'dng':''}" data-a="ativo">${u.active?'Desativar':'Reativar'}</button>`}</div>
    ${OPEN===u.id+':senha'?`<form class="inline" data-f="senha"><label>Nova senha para ${esc(u.name)}<input name="v" type="text" minlength="8" autocomplete="new-password"></label><button class="btn pri sm">Salvar</button><button type="button" class="btn sm" data-a="fechar">Cancelar</button></form>`:''}
    ${OPEN===u.id+':nome'?`<form class="inline" data-f="nome"><label>Nome<input name="v" maxlength="60" value="${esc(u.name)}"></label><button class="btn pri sm">Salvar</button><button type="button" class="btn sm" data-a="fechar">Cancelar</button></form>`:''}
    <p class="msg" data-msg></p></div>`).join('');
   const f=$('#lista form input');f&&f.focus();
  }
  function msg(el,t,ok){el.textContent=t;el.className='msg '+(ok?'ok':'err')}
- async function load(){const [me,l]=await Promise.all([api('GET','/api/me'),api('GET','/api/usuarios')]);ME=me.user;LIST=l.users;render()}
+ async function load(){const [me,l,pf]=await Promise.all([api('GET','/api/me'),api('GET','/api/usuarios'),api('GET','/api/perfis')]);ME=me.user;LIST=l.users;PERFIS=pf.perfis;PERFIS.forEach(p=>LBL[p.id]=p.label);render();matriz()}
  $('#lista').addEventListener('click',async ev=>{const b=ev.target.closest('[data-a]');if(!b)return;const box=b.closest('.user'),id=box.dataset.id,u=LIST.find(x=>x.id===id),a=b.dataset.a,m=box.querySelector('[data-msg]');
   if(a==='fechar'){OPEN='';return render()}
   if(a==='senha'||a==='nome'){OPEN=id+':'+a;return render()}
-  try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),a==='papel'?{papel:u.role==='admin'?'operador':'admin'}:{ativo:!u.active});LIST=LIST.map(x=>x.id===id?r.user:x);render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),a==='ativo'?(r.user.active?'Acesso liberado.':'Acesso bloqueado: a pessoa saiu do sistema.'):'Permissão alterada.',true)}catch(x){msg(m,x.message)}});
+  if(a==='papel')return;
+  try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),{ativo:!u.active});LIST=LIST.map(x=>x.id===id?r.user:x);render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),a==='ativo'?(r.user.active?'Acesso liberado.':'Acesso bloqueado: a pessoa saiu do sistema.'):'Permissão alterada.',true)}catch(x){msg(m,x.message)}});
+ $('#lista').addEventListener('change',async ev=>{const sel=ev.target.closest('select[data-a=papel]');if(!sel)return;const box=sel.closest('.user'),id=box.dataset.id,m=box.querySelector('[data-msg]');
+  try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),{papel:sel.value});LIST=LIST.map(x=>x.id===id?r.user:x);render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),'Perfil alterado para '+(LBL[r.user.role]||r.user.role)+'.',true)}catch(x){render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),x.message)}});
  $('#lista').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,box=f.closest('.user'),id=box.dataset.id,m=box.querySelector('[data-msg]'),v=f.v.value;
   try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),f.dataset.f==='senha'?{senha:v}:{nome:v});LIST=LIST.map(x=>x.id===id?r.user:x);OPEN='';render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),f.dataset.f==='senha'?'Senha trocada. Passe a nova senha para a pessoa.':'Nome alterado.',true)}catch(x){msg(m,x.message)}});
  $('#novo').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,m=$('#novo-msg');

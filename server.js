@@ -106,7 +106,20 @@ async function users(force) {
   }
   return usersCache;
 }
-const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, active: u.active, created_at: u.created_at, last_login: u.last_login });
+/* ---------- perfis (RBAC) ----------
+ * admin   (Administradora): tudo, inclusive usuários, backup e apagar dados.
+ * gerente (Gerente):        todas as telas da loja, sem usuários nem apagar dados.
+ * caixa   (Caixa):          Caixa, Vendas e Clientes e fiado; só grava vendas, caixas, fiado e cadastros de clientes.
+ */
+const ALL_TABS = ['painel', 'caixa', 'vendas', 'clientes', 'produtos', 'movimentacoes', 'notas', 'compras', 'fornecedores', 'financeiro', 'analise'];
+const ROLES = {
+  admin: { label: 'Administradora', tabs: ALL_TABS, write: /./, del: true, users: true, data: true },
+  gerente: { label: 'Gerente', tabs: ALL_TABS, write: /./, del: true, users: false, data: false },
+  caixa: { label: 'Caixa', tabs: ['caixa', 'vendas', 'clientes'], write: /^(cadastros|caixas|lancamentos|vendas-\d{4}-\d{2})$/, del: false, users: false, data: false },
+};
+const roleOf = (u) => (ROLES[u.role] ? u.role : u.role === 'operador' ? 'gerente' : 'caixa');
+const perms = (u) => { const r = ROLES[roleOf(u)]; return { role: roleOf(u), label: r.label, tabs: r.tabs, users: r.users, data: r.data }; };
+const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: roleOf(u), active: u.active, created_at: u.created_at, last_login: u.last_login });
 const USERNAME = /^[a-z0-9._-]{3,30}$/;
 
 /* ---------- sessão: cookie assinado com o id do usuário, a validade e a versão da senha ---------- */
@@ -181,7 +194,7 @@ async function handleOwnPassword(req, res, me) {
 
 // /api/usuarios (GET lista, POST cria) e /api/usuarios/<id> (PATCH altera). Só administradoras.
 async function handleUsers(req, res, me, id) {
-  if (me.role !== 'admin') return send(res, 403, { error: 'Só a administradora pode gerenciar usuários.' });
+  if (!ROLES[roleOf(me)].users) return send(res, 403, { error: 'Só a administradora pode gerenciar usuários.' });
   const all = await users(true);
   if (!id && req.method === 'GET') return send(res, 200, { users: all.map(publicUser) });
   if (!id && req.method === 'POST') {
@@ -189,7 +202,7 @@ async function handleUsers(req, res, me, id) {
     const username = String(b.usuario || '').trim().toLowerCase();
     const name = String(b.nome || '').trim().slice(0, 60);
     const pass = String(b.senha || '');
-    const role = b.papel === 'admin' ? 'admin' : 'operador';
+    const role = ROLES[b.papel] ? b.papel : 'caixa';
     if (!USERNAME.test(username)) return send(res, 400, { error: 'O usuário precisa ter de 3 a 30 caracteres: letras minúsculas, números, ponto, traço ou sublinhado, sem espaços.' });
     if (!name) return send(res, 400, { error: 'Informe o nome.' });
     if (pass.length < 8) return send(res, 400, { error: 'A senha precisa ter pelo menos 8 caracteres.' });
@@ -204,14 +217,15 @@ async function handleUsers(req, res, me, id) {
     if (!u) return send(res, 404, { error: 'Usuário não encontrado.' });
     const b = await readJson(req, 10000);
     const f = {};
-    const isLastAdmin = u.role === 'admin' && u.active && all.filter((x) => x.role === 'admin' && x.active).length === 1;
+    const isLastAdmin = roleOf(u) === 'admin' && u.active && all.filter((x) => roleOf(x) === 'admin' && x.active).length === 1;
     if (b.nome !== undefined) {
       const name = String(b.nome).trim().slice(0, 60);
       if (!name) return send(res, 400, { error: 'Informe o nome.' });
       f.name = name;
     }
     if (b.papel !== undefined) {
-      const role = b.papel === 'admin' ? 'admin' : 'operador';
+      if (!ROLES[b.papel]) return send(res, 400, { error: 'Perfil inválido.' });
+      const role = b.papel;
       if (role !== 'admin' && isLastAdmin) return send(res, 400, { error: 'É preciso ter pelo menos uma administradora ativa.' });
       f.role = role;
     }
@@ -237,7 +251,7 @@ async function handleUsers(req, res, me, id) {
 }
 
 /* ---------- dados ---------- */
-async function handleData(req, res, parts) {
+async function handleData(req, res, parts, me) {
   // parts: ['api','col',<col>] ou ['api','col',<col>,'_version'] ou ['api','col',<col>,<id>]
   const col = parts[2];
   if (!col || !SEG.test(col)) return send(res, 400, { error: 'coleção inválida' });
@@ -251,6 +265,10 @@ async function handleData(req, res, parts) {
   if (parts.length === 4) {
     const id = parts[3];
     if (!SEG.test(id) || id === '.' || id === '..') return send(res, 400, { error: 'documento inválido' });
+    const r = ROLES[roleOf(me)];
+    if ((req.method === 'PUT' && !r.write.test(id)) || (req.method === 'DELETE' && !r.del)) {
+      return send(res, 403, { error: `O perfil ${r.label} não pode alterar esta parte do sistema.` });
+    }
     if (req.method === 'PUT') {
       const data = await readJson(req);
       if (!data || typeof data !== 'object' || Array.isArray(data)) return send(res, 400, { error: 'o corpo precisa ser um objeto JSON' });
@@ -293,14 +311,15 @@ const server = http.createServer(async (req, res) => {
     const parts = p.split('/').filter(Boolean);
     if (!me) return parts[0] === 'api' ? send(res, 401, { error: 'Entre com seu usuário e senha.' }) : redirect(res, '/login');
     if (parts[0] === 'api') {
-      if (parts[1] === 'me' && parts.length === 2 && req.method === 'GET') return send(res, 200, { user: publicUser(me) });
+      if (parts[1] === 'me' && parts.length === 2 && req.method === 'GET') return send(res, 200, { user: { ...publicUser(me), ...perms(me) } });
       if (parts[1] === 'senha' && parts.length === 2 && req.method === 'POST') return await handleOwnPassword(req, res, me);
+      if (parts[1] === 'perfis' && parts.length === 2 && req.method === 'GET') return send(res, 200, { perfis: Object.entries(ROLES).map(([id, r]) => ({ id, label: r.label, tabs: r.tabs, users: r.users, data: r.data })) });
       if (parts[1] === 'usuarios' && parts.length <= 3) return await handleUsers(req, res, me, parts[2]);
-      if (parts[1] === 'col') return await handleData(req, res, parts);
+      if (parts[1] === 'col') return await handleData(req, res, parts, me);
       return send(res, 404, { error: 'não encontrado' });
     }
     if (p === '/' || p === '/index.html') return serveFile(req, res, '/index.html');
-    if (p === '/usuarios') return me.role === 'admin' ? serveFile(req, res, '/usuarios.html') : redirect(res, '/');
+    if (p === '/usuarios') return ROLES[roleOf(me)].users ? serveFile(req, res, '/usuarios.html') : redirect(res, '/');
     if (p === '/login.html' || p === '/usuarios.html') return redirect(res, '/');
     return serveFile(req, res, p);
   } catch (e) {

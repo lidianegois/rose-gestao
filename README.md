@@ -159,12 +159,22 @@ O banco do Render começa vazio. Os dados do site no claude.ai **não passam soz
 
 **Depois de atualizar:** recarregue a página de verdade (F5). Só trocar de aba no menu não baixa a versão nova.
 
-## 9. Usuários e acesso
+## 9. Usuários, perfis e acesso (RBAC)
 
 - **Entrada:** `/login`. Quem não entrou é levado para lá.
-- **Primeira administradora:** criada sozinha na primeira vez que o servidor sobe, com `APP_USER` e `APP_PASSWORD`. Depois disso essas variáveis não mudam mais nada: as senhas passam a ser trocadas pela tela **Usuários**.
-- **Administradora:** usa o sistema e, em **Usuários** (link no topo, ou Mais › Usuários e senhas no celular), cria contas, troca senhas, muda permissões e desativa pessoas.
-- **Operador:** usa todo o sistema, mas não vê a tela de usuários.
+- **Primeira administradora:** criada sozinha na primeira vez que o servidor sobe, com `APP_USER` e `APP_PASSWORD`. Depois disso essas variáveis não mudam mais nada: usuários e senhas passam a ser cuidados na tela **Usuários e perfis**.
+- **Menu lateral:** mostra só as telas do perfil. No computador fica fixo à esquerda; no celular abre pelo botão ☰ ou por **Mais**.
+
+| Perfil | Telas | Pode alterar |
+|---|---|---|
+| Administradora | todas, mais Usuários e perfis, backup e apagar dados | tudo |
+| Gerente | todas as telas da loja | tudo, menos usuários, backup e apagar dados |
+| Caixa | Caixa, Vendas, Clientes e fiado | vendas, caixa, fiado e clientes; não exclui vendas nem clientes |
+
+- **Proteção no servidor**, além de esconder na tela:
+  - o perfil Caixa só consegue gravar os documentos `cadastros`, `caixas`, `lancamentos` e `vendas-*`, e não apaga documentos;
+  - só a administradora acessa `/usuarios` e `/api/usuarios`.
+- **Limite:** como os dados são guardados por documento, o servidor não separa, dentro de `cadastros` e `lancamentos`, o que o Caixa altera. Esses limites mais finos (não excluir venda ou cliente, não mexer em produtos) são aplicados pela tela.
 - **Desativar** tira o acesso na hora, sem apagar o histórico. Não existe exclusão de usuários.
 - Cada venda e cada abertura de caixa guardam o nome de quem estava conectado ("Registrada por", nos detalhes da venda).
 - **`SESSION_SECRET`:** chave que assina as sessões. Sem ela, todos saem do sistema quando o servidor reinicia.
