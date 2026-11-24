@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { createStore } = require('./storage');
+const D = require('./public/docdiff.js');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -262,6 +263,23 @@ async function handleData(req, res, parts, me) {
   if (parts.length === 4 && parts[3] === '_version' && req.method === 'GET') {
     return send(res, 200, { version: await store.version() });
   }
+  if (parts.length === 4 && parts[3] === '_batch' && req.method === 'POST') {
+    // várias mudanças de uma vez, numa só transação: { docs: { <documento>: [mudanças] }, bulk?: true }
+    const body = await readJson(req, 20 * 1024 * 1024);
+    const docs = body && body.docs;
+    if (!docs || typeof docs !== 'object' || Array.isArray(docs)) return send(res, 400, { error: 'lote inválido' });
+    const ids = Object.keys(docs);
+    if (!ids.length || ids.length > 100) return send(res, 400, { error: 'lote inválido' });
+    const r = ROLES[roleOf(me)];
+    for (const id of ids) {
+      if (!SEG.test(id) || id === '.' || id === '..' || !Array.isArray(docs[id])) return send(res, 400, { error: 'documento inválido no lote' });
+      if (!r.write.test(id)) return send(res, 403, { error: `O perfil ${r.label} não pode alterar esta parte do sistema.` });
+      if (!r.del && docs[id].some((o) => o && (o.op === 'del' || o.op === 'list'))) return send(res, 403, { error: `O perfil ${r.label} não pode apagar registros.` });
+    }
+    const out = await store.applyBatch(col, docs, { bulk: body.bulk === true && roleOf(me) === 'admin' });
+    if (!out.ok) return send(res, 409, { error: 'Outra pessoa alterou os mesmos registros.', conflicts: out.conflicts });
+    return send(res, 200, { version: out.version || (await store.version()), assigned: out.assigned, changed: out.changed });
+  }
   if (parts.length === 4) {
     const id = parts[3];
     if (!SEG.test(id) || id === '.' || id === '..') return send(res, 400, { error: 'documento inválido' });
@@ -270,9 +288,22 @@ async function handleData(req, res, parts, me) {
       return send(res, 403, { error: `O perfil ${r.label} não pode alterar esta parte do sistema.` });
     }
     if (req.method === 'PUT') {
+      // gravação do documento inteiro (compatibilidade): vira um lote de diferenças e passa pelas mesmas regras
       const data = await readJson(req);
       if (!data || typeof data !== 'object' || Array.isArray(data)) return send(res, 400, { error: 'o corpo precisa ser um objeto JSON' });
-      return send(res, 200, { version: await store.put(col, id, data) });
+      try {
+        const out = await store.applyBatch(col, {
+          [id]: (cur) => {
+            const ops = D.diffDoc(id, cur, data);
+            if (!r.del && ops.some((o) => o.op === 'del' || o.op === 'list')) throw Object.assign(new Error('sem permissão'), { perm: true });
+            return ops;
+          },
+        }, {});
+        return send(res, 200, { version: out.version || (await store.version()) });
+      } catch (e) {
+        if (e && e.perm) return send(res, 403, { error: `O perfil ${r.label} não pode apagar registros.` });
+        throw e;
+      }
     }
     if (req.method === 'DELETE') return send(res, 200, { version: await store.remove(col, id) });
   }

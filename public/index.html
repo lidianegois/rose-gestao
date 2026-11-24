@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rose · Gestão</title>
+<script src="docdiff.js"></script>
 <script src="db-adapter.js"></script>
 <script src="sessao.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -818,11 +819,10 @@ function openM(title,body,o={}){M=o;$('#dt').textContent=title;$('#db').innerHTM
  o.onInput&&o.onInput(dform,null);const f=$('#db').querySelector('input:not([type=hidden]),select');f&&f.focus()}
 let PEND=null,inflight=new Set();
 /* junta os dados que chegaram do servidor com as alterações locais ainda não gravadas (essas têm prioridade) */
-function applyRemote(docs){const R=fromDocs(docs),keep=new Set([...dirty,...inflight]);
- for(const k of keep){if(k==='cadastros'){R.clientes=S.clientes;R.produtos=S.produtos;R.fornecedores=S.fornecedores;R.seq=S.seq;R.config=S.config}
-  else if(k.startsWith('vendas-')||k.startsWith('notas-')){const f=k.startsWith('vendas-')?'vendas':'notas',m=k.slice(f.length+1);R[f]=R[f].filter(v=>v.data.slice(0,7)!==m).concat(S[f].filter(v=>v.data.slice(0,7)===m))}
-  else if(Array.isArray(R[k]))R[k]=S[k]}
- S=R}
+function applyRemote(docs){const m=new Map(docs.map(d=>[d.id,d.data()])),keep=new Set([...dirty,...inflight]);let perdidos=0;
+ for(const k of keep){const loc=body(k);if(!loc)continue;const ops=RoseDiff.diffDoc(k,col&&col.baseOf?col.baseOf(k):null,loc),r=RoseDiff.applyOps(k,m.get(k)||null,ops,{});m.set(k,r.doc);perdidos+=r.conflicts.length}
+ S=fromDocs([...m].map(([id,data])=>({id,data:()=>data})));col&&col.absorb&&col.absorb(docs);
+ if(perdidos)toast('Outra pessoa alterou '+(perdidos===1?'um registro':perdidos+' registros')+' que você também editava: valeu a versão mais recente.')}
 function closeM(){if(dlg.close)dlg.close();else dlg.removeAttribute('open');M={};if(PEND){const p=PEND;PEND=null;applyRemote(p.docs);render()}}
 dform.addEventListener('submit',e=>{e.preventDefault();if(!M.onSubmit)return closeM();const r=M.onSubmit(new FormData(dform),dform);if(typeof r==='string'){$('#derr').textContent=r}else closeM()});
 dform.addEventListener('input',e=>M.onInput&&M.onInput(dform,e));
@@ -1020,10 +1020,10 @@ novaNota:fNotaXml,notaManual:()=>fNota(),verNota,addNi:()=>{$('#nlines').insertA
  cancelar:id=>{const c=S.compras.find(x=>x.id===id);confirmM('Cancelar pedido',`Cancelar o pedido nº ${c.n}?`,()=>{c.status='cancelado';mark('compras');toast('Pedido cancelado.')},'Cancelar pedido')},
  delCompra:id=>{const c=S.compras.find(x=>x.id===id);if(c.status==='recebido'&&c.it.some(i=>(C.st[i[0]]||0)-i[1]<0))return void($('#derr').textContent='Não dá para excluir: parte desta mercadoria já foi vendida e o estoque ficaria negativo.');
   confirmM('Excluir pedido',`Excluir o pedido nº ${c.n}?${c.status==='recebido'?' A entrada no estoque e as contas a pagar dele também serão desfeitas.':''}`,()=>{S.compras=S.compras.filter(x=>x.id!==id);S.lancamentos=S.lancamentos.filter(l=>l.origem!=='compra:'+id);mark('compras','lancamentos');toast('Pedido excluído.')},'Excluir')},
- seed:()=>{if(!isAdm())return toast('Só a administradora pode carregar o exemplo.');S=genSeed(hoje());markAll();toast('Dados de exemplo carregados.')},
+ seed:()=>{if(!isAdm())return toast('Só a administradora pode carregar o exemplo.');S=genSeed(hoje());window.__bulk=true;markAll();toast('Dados de exemplo carregados.')},
  wipe:()=>!isAdm()?toast('Só a administradora pode apagar os dados.'):(sideClose(),confirmM('Apagar todos os dados','Isso apaga produtos, vendas, compras, fornecedores e lançamentos para todos que usam esta página. Copie um backup antes se quiser guardar.',()=>{const ks=keysAll();S=empty();markAll(ks);toast('Todos os dados foram apagados.')},'Apagar tudo')),
  backup:async()=>{sideClose();if(!isAdm())return toast('Só a administradora pode copiar o backup.');const t=JSON.stringify(S);try{await navigator.clipboard.writeText(t);toast('Backup copiado. Cole num arquivo de texto para guardar.')}catch(e){openM('Backup dos dados',`<p class="mut" style="margin-top:0">Selecione tudo e copie:</p><textarea readonly>${esc(t)}</textarea>`,{submit:null})}},
- restore:()=>!isAdm()?toast('Só a administradora pode restaurar backup.'):(sideClose(),openM('Restaurar backup',`<p class="mut" style="margin-top:0">Cole aqui o texto de um backup copiado antes. Os dados atuais serão substituídos.</p><textarea name="json" aria-label="Backup"></textarea>`,{submit:'Restaurar',danger:true,onSubmit(d){let o;try{o=JSON.parse(d.get('json'))}catch(e){return'Esse texto não é um backup válido.'}if(!o||!Array.isArray(o.produtos))return'Esse texto não é um backup desta página.';const ks=keysAll();S=norm(o);markAll(ks);toast('Backup restaurado.')}}))
+ restore:()=>!isAdm()?toast('Só a administradora pode restaurar backup.'):(sideClose(),openM('Restaurar backup',`<p class="mut" style="margin-top:0">Cole aqui o texto de um backup copiado antes. Os dados atuais serão substituídos.</p><textarea name="json" aria-label="Backup"></textarea>`,{submit:'Restaurar',danger:true,onSubmit(d){let o;try{o=JSON.parse(d.get('json'))}catch(e){return'Esse texto não é um backup válido.'}if(!o||!Array.isArray(o.produtos))return'Esse texto não é um backup desta página.';const ks=keysAll();S=norm(o);window.__bulk=true;markAll(ks);toast('Backup restaurado.')}}))
 };
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const f=A[b.dataset.act];if(f){e.preventDefault();f(b.dataset.id,b,e)}});
 app.addEventListener('input',e=>{const ds=e.target.dataset||{},k=ds.f;if(k){F[k]=e.target.value;render()}else if(ds.p){const v=e.target.value;if(ds.p==='PQ')PQ=v;else if(ds.p==='PDESC'){PDESC=v;PAYS=[]}else if(ds.p==='PREC')PREC=v;else if(ds.p==='PCLI')PCLI=v;else if(ds.p==='PVAL')PVAL=v;render()}});
@@ -1104,15 +1104,26 @@ function body(k){if(k==='caixas')return{items:S.caixas};if(k==='cadastros')retur
 async function flush(){
  if(!db){try{localStorage.setItem('loja-estado',JSON.stringify(S));setSt('Salvo neste navegador')}catch(e){setSt('Não salvo')}dirty.clear();return}
  if(saving)return;saving=true;
- try{while(dirty.size){const k=dirty.values().next().value;dirty.delete(k);inflight.add(k);const b=body(k),ref=col.doc(k);try{if(b){await ref.set(JSON.parse(JSON.stringify(b)));remote.add(k)}else if(remote.has(k)){await ref.delete();remote.delete(k)}}catch(e){if(e&&e.code==='unavailable'){await new Promise(r=>setTimeout(r,800+Math.random()*800));dirty.add(k)}else throw e}finally{inflight.delete(k)}}setSt('Tudo salvo')}
+ try{while(dirty.size){const ks=[...dirty];dirty.clear();ks.forEach(k=>inflight.add(k));
+   try{const sets={},dels=[];for(const k of ks){const b=body(k);if(b)sets[k]=JSON.parse(JSON.stringify(b));else if(remote.has(k))dels.push(k)}
+    const sk=Object.keys(sets);
+    if(sk.length){if(col.setMany)await col.setMany(sets);else for(const k of sk)await col.doc(k).set(sets[k]);sk.forEach(k=>remote.add(k))}
+    for(const k of dels){await col.doc(k).delete();remote.delete(k)}
+   }catch(e){
+    if(e&&e.code==='unavailable'){await new Promise(r=>setTimeout(r,800+Math.random()*800));ks.forEach(k=>dirty.add(k))}
+    else if(e&&e.code==='conflict'){dirty.clear();const dd=e.docs||[];S=fromDocs(dd.map(d=>({id:d.id,data:()=>d.data})));remote=new Set(dd.map(d=>d.id));toast('Outra pessoa alterou os mesmos dados ao mesmo tempo. A tela foi atualizada com a versão mais recente: confira e refaça sua alteração.');render()}
+    else throw e
+   }finally{ks.forEach(k=>inflight.delete(k))}}
+  setSt('Tudo salvo')}
  catch(e){const c=e&&e.code;setSt('Erro ao salvar');toast(c==='invalid_argument'?'Você não tem permissão para alterar os dados desta página.':c==='quota_exceeded'?'O espaço de dados está cheio. Exclua registros antigos.':'Não foi possível salvar agora. Tente novamente.')}
- saving=false;if(dirty.size)flush();
+ saving=false;if(!dirty.size)window.__bulk=false;if(dirty.size)flush();
 }
 function fromDocs(docs){const s=empty();for(const d of docs){const b=JSON.parse(JSON.stringify(d.data()||{})),id=d.id;
  if(id==='cadastros'){s.clientes=arr(b.clientes);s.produtos=arr(b.produtos);s.fornecedores=arr(b.fornecedores);s.seq={venda:+(b.seq&&b.seq.venda)||0,compra:+(b.seq&&b.seq.compra)||0};s.config=b.config&&typeof b.config==='object'?b.config:{}}
  else if(id.startsWith('vendas-'))s.vendas.push(...arr(b.items));else if(id.startsWith('notas-'))s.notas.push(...arr(b.items));else if(['compras','movimentos','lancamentos','caixas'].includes(id))s[id]=arr(b.items)}
  s.fornecedores.forEach(f=>f.itens=arr(f.itens));s.lancamentos=s.lancamentos.map(normL);return s}
 
+window.addEventListener('rose-assigned',e=>{const a=e.detail||{};let ch=false;for(const doc of Object.keys(a)){const L=doc==='compras'?S.compras:doc.startsWith('vendas-')?S.vendas:null;if(!L)continue;const key=doc==='compras'?'compra':'venda';for(const r of L){const n=a[doc][r.id];if(n===undefined)continue;if(r.n!==n){r.n=n;ch=true}if((S.seq[key]||0)<n)S.seq[key]=n;if(LAST&&LAST.id===r.id&&LAST.n!==n){LAST.n=n;ch=true}}}const vn={};for(const d of Object.keys(a))if(d.startsWith('vendas-'))Object.assign(vn,a[d]);for(const l of S.lancamentos){const m=/^venda:(.+)$/.exec(l.origem||'');if(m&&vn[m[1]]!==undefined){const nd=RoseDiff.renumDesc(l.desc,vn[m[1]]);if(nd!==l.desc){l.desc=nd;ch=true}}}if(ch)render()});
 try{const p=localStorage.getItem('loja-per');if(p){per=p;$('#per').value=p}const pc=JSON.parse(localStorage.getItem('loja-pc')||'null');if(pc)PC=pc}catch(e){}perUI();
 render();
 (async()=>{let d=null;try{d=window.claude&&window.claude.use?await window.claude.use('db'):null}catch(e){d=null}
@@ -1120,7 +1131,7 @@ render();
  db=d;col=db.collection('loja');setSt('Conectando…');
  const to=setTimeout(()=>{if(!loaded){loaded=true;render()}setSt('Sem conexão: os dados podem estar desatualizados')},10000);
  col.onSnapshot(snap=>{if(!snap.metadata.fromCache){clearTimeout(to);if(!dirty.size&&!saving)setSt('Tudo salvo')}remote=new Set(snap.docs.map(x=>x.id));
-  if(loaded&&dlg.open){PEND=snap;return}PEND=null;if(loaded&&(dirty.size||saving||inflight.size))applyRemote(snap.docs);else S=fromDocs(snap.docs);loaded=true;render()},
+  if(loaded&&dlg.open){PEND=snap;return}PEND=null;if(loaded&&(dirty.size||saving||inflight.size))applyRemote(snap.docs);else{S=fromDocs(snap.docs);col.absorb&&col.absorb(snap)}loaded=true;render()},
   ()=>{clearTimeout(to);loaded=true;setSt('Dados indisponíveis no momento');render()});
 })();
 }

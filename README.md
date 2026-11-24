@@ -11,7 +11,7 @@ Sistema da loja: caixa, vendas, fiado, produtos, estoque com lote e validade, no
 | Site (front-end) | **HTML, CSS e JavaScript puros**, num único arquivo (`public/index.html`). Sem framework, sem etapa de build. As telas trocam pelo endereço (`#caixa`, `#vendas`…). Os gráficos são desenhados em SVG pelo próprio código. |
 | Fontes | Playfair Display e Inter, carregadas do Google Fonts. Sem internet, o navegador usa fontes parecidas. |
 | Servidor (back-end) | **Node.js 20 ou mais novo**, só com o módulo `http` nativo. Entrega o site e uma API de documentos JSON (`server.js`). |
-| Banco de dados | **PostgreSQL**, com a tabela `app_docs` (JSONB) (`storage.js` e `db/schema.sql`). Sem `DATABASE_URL`, grava no arquivo `data/banco-local.json`, que serve só para testes. |
+| Banco de dados | **PostgreSQL**, com a tabela `app_docs` (JSONB) (`storage.js` e `db/migrations/`). Sem `DATABASE_URL`, grava no arquivo `data/banco-local.json`, que serve só para testes. |
 | Ligação site ↔ banco | `public/db-adapter.js`. O site foi feito para o armazenamento do claude.ai; este arquivo oferece a mesma interface falando com o servidor. Por isso o `index.html` é o mesmo do site original, com uma única linha a mais, que carrega o adaptador. |
 | Dependência | só `pg` (driver do PostgreSQL). |
 | Segurança | página de entrada (`/login`) com contas de usuário (administradora ou operador), senhas guardadas só como hash scrypt, sessão por cookie seguro (HttpOnly, 30 dias), bloqueio após 10 tentativas erradas em 15 minutos. |
@@ -27,7 +27,7 @@ rose-gestao/
 │   ├── sessao.js         ← mostra quem está conectado e o botão Sair
 │   └── db-adapter.js     ← liga o site ao servidor
 ├── db/
-│   └── schema.sql        ← cria a tabela no PostgreSQL (o servidor roda sozinho)
+│   └── migrations/       ← migrações numeradas, aplicadas sozinhas ao iniciar
 ├── exemplos/
 │   └── NFe-exemplo-4521.xml   ← nota fiscal de teste para a importação
 ├── server.js             ← servidor: site + API + senha
@@ -187,3 +187,8 @@ O banco do Render começa vazio. Os dados do site no claude.ai **não passam soz
 - Cupom não fiscal para imprimir (80 mm) na venda concluída e na lista de vendas do caixa.
 - Atalhos: F2 buscar, F4 desconto, F6 espera, F9 finalizar, Delete remove o último item. "Tela cheia" no computador.
 - Vendas com mais de uma forma gravam `pgs: [[forma, valor], ...]`; `pag` guarda a forma principal.
+
+## 11. Vários usuários ao mesmo tempo (Etapa 1)
+
+Gravações por diferença, em transação, com numeração de vendas e compras no servidor. Detalhes e resultados dos testes em
+`docs/ETAPA-1-simultaneidade.md`; backup e migrações em `docs/ETAPA-0-backup-e-migracoes.md`; como testar em `test/README.md`.
