@@ -11,6 +11,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const net = require('net');
 const { createStore } = require('./storage');
 const D = require('./public/docdiff.js');
 const P = require('./lib/perms.js');
@@ -185,7 +186,21 @@ async function currentUser(req) {
 
 /* ---------- limite de tentativas: 10 erros em 15 minutos por endereço ---------- */
 const attempts = new Map();
-const clientIp = (req) => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+/* IP do cliente para o limite de tentativas. No Render, a Cloudflare grava CF-Connecting-IP (e True-Client-IP) sobrescrevendo o que o
+ * cliente mandar; já o X-Forwarded-For só recebe acréscimos, então a primeira posição é controlada pelo cliente e NÃO é usada.
+ * Os cabeçalhos só são aceitos quando o servidor roda atrás do Render (variável RENDER=true) ou se TRUST_CLIENT_IP_HEADERS=1;
+ * fora disso (teste local, acesso direto) vale só o endereço da conexão, que não dá para forjar. */
+const TRUST_IP_HEADERS = process.env.RENDER === 'true' || process.env.TRUST_CLIENT_IP_HEADERS === '1';
+const IP_HEADERS = ['cf-connecting-ip', 'true-client-ip'];
+function clientIp(req) {
+  if (TRUST_IP_HEADERS) {
+    for (const h of IP_HEADERS) {
+      const v = req.headers[h];
+      if (typeof v === 'string' && net.isIP(v.trim())) return v.trim().toLowerCase();
+    }
+  }
+  return String(req.socket.remoteAddress || '');
+}
 function tooMany(ip) {
   const a = attempts.get(ip);
   return !!a && a.n >= 10 && Date.now() - a.t < 15 * 60000;
