@@ -16,6 +16,10 @@ const STK = require('./lib/stock.js');
 const AUDIT = require('./lib/audit.js');
 
 function createStore() {
+  /* Modo piloto nunca cai no arquivo local: sem DATABASE_URL o servidor recusa iniciar, antes de criar contas ou gravar dados. */
+  if ((process.env.PLANO_PILOTO || process.env.TI_SENHA) && !String(process.env.DATABASE_URL || '').trim()) {
+    throw new Error('Modo piloto: DATABASE_URL não está definida. Defina o endereço do banco de teste; nada foi criado nem gravado.');
+  }
   return process.env.DATABASE_URL ? pgStore(process.env.DATABASE_URL) : fileStore(path.join(__dirname, 'data'));
 }
 

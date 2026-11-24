@@ -43,7 +43,7 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-const store = createStore();
+const store = (() => { try { return createStore(); } catch (e) { console.error(e.message); process.exit(1); } })();
 
 /* ---------- respostas ---------- */
 const BASE_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' };

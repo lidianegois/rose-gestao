@@ -41,6 +41,28 @@ const OK_DB = 'rose_gestao_teste_db';
   ok('sem variáveis de piloto, o serviço inicia em qualquer banco (como antes)', await up(p, 3420));
   await stop(p);
 
+  /* 1b) DATABASE_URL vazia ou ausente + modo piloto: recusa antes de criar contas ou gravar dados */
+  const fs = require('fs'), path = require('path');
+  const dataFile = path.join(__dirname, '..', 'data', 'banco-local.json');
+  const existia = fs.existsSync(dataFile);
+  for (const [rotulo, env] of [['PLANO_PILOTO', { PLANO_PILOTO: 'basico' }], ['TI_SENHA', { TI_SENHA: SEG.ti }], ['PLANO_PILOTO completo + TI_SENHA', { PLANO_PILOTO: 'completo', TI_SENHA: SEG.ti }]]) {
+    for (const vazio of ['', '   ', null]) {
+      log = '';
+      const envp = { ...process.env, PORT: '3427', SESSION_SECRET: SEG.sess, APP_USER: 'rose', APP_PASSWORD: SEG.rose, ...env };
+      if (vazio === null) delete envp.DATABASE_URL; else envp.DATABASE_URL = vazio;
+      const q = spawn('node', ['server.js'], { env: envp, stdio: ['ignore', 'pipe', 'pipe'] });
+      q.stdout.on('data', (d) => { log += d; }); q.stderr.on('data', (d) => { log += d; });
+      const subiu = await up(q, 3427); await new Promise((r) => setTimeout(r, 400));
+      ok(`${rotulo} com DATABASE_URL ${vazio === null ? 'ausente' : vazio === '' ? 'vazia' : 'em branco'}: não inicia`, !subiu && q.exitCode !== null && q.exitCode !== 0, q.exitCode);
+      ok('  mensagem clara, sem senhas', /DATABASE_URL não está definida/.test(log) && !log.includes(SEG.rose) && !log.includes(SEG.ti), log.slice(0, 200));
+      await stop(q);
+    }
+  }
+  ok('DATABASE_URL vazia: nenhum arquivo local de dados foi criado', existia || !fs.existsSync(dataFile));
+  /* o script de criação da conta também recusa */
+  const sc = require('child_process').spawnSync('node', ['scripts/criar-ti-lidiane.js'], { env: { ...process.env, DATABASE_URL: '', TI_SENHA: SEG.ti, PILOTO_BANCO: OK_DB }, encoding: 'utf8' });
+  ok('script criar-ti-lidiane com DATABASE_URL vazia: recusa', sc.status !== 0 && /DATABASE_URL não está definida/.test(sc.stderr + sc.stdout) && !(sc.stdout + sc.stderr).includes(SEG.ti));
+
   /* 2) banco de teste esperado, Básico, com TI_SENHA (deve ser ignorada) */
   fresh(OK_DB);
   p = run(OK_DB, { PLANO_PILOTO: 'basico', TI_SENHA: SEG.ti }, 3421);
