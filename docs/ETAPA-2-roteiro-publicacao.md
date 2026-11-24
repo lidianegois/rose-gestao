@@ -41,3 +41,9 @@ Para cada perfil, conferir:
 - Diariamente abrir *Conferência de estoque*, exportar o CSV, conferir os saldos físicos, registrar entradas ou ajustes.
 - Atenção especial: BEB003, HIG001 e MER002 (saldo zero na cópia).
 - Ao final dos 7 dias, se não houver divergência pendente, a administradora liga o bloqueio na própria tela (marcando que conferiu).
+
+## F. Contas temporárias de teste
+- Script `scripts/contas-teste.sh` (`criar`, `listar`, `desativar`), usado só **depois do deploy**, pois os perfis novos não existem na produção atual.
+- Cria 7 contas `teste_<perfil>` (financeiro, caixa_vendas, estoque, compras, consulta, gerente_atual, caixa_atual) com senhas aleatórias gravadas em `contas-teste.txt` (local, fora do git). Só mexe em usuários cujo acesso começa com `teste_`; o administrador não é tocado.
+- Ao final: `desativar` (as contas ficam inativas e não entram mais; o histórico e a auditoria são preservados) e apagar `contas-teste.txt`.
+- Testado em servidor local: criou as 7, desativou, conta desativada recebeu 403 no login, administrador continuou entrando.
