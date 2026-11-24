@@ -15,6 +15,8 @@ const net = require('net');
 const { createStore } = require('./storage');
 const D = require('./public/docdiff.js');
 const P = require('./lib/perms.js');
+const AUDIT = require('./lib/audit.js');
+const PL = require('./lib/plans.js');
 const STK = require('./lib/stock.js');
 const { makeGuard } = require('./lib/guard.js');
 const V2 = process.env.RBAC_V2 !== 'off'; // interruptor de segurança: 'off' volta às regras de antes da Etapa 2
@@ -139,14 +141,34 @@ async function rolesMap(force) {
   return rolesCache;
 }
 const profileOf = (u) => u.role_id || P.LEGACY[u.role] || 'caixa_atual';
+/* plano da empresa: lido da configuração "plano" (sem ela, completo = como antes). PLANO_ENFORCE=off ignora o plano. */
+let planoCache = null, planoAt = 0;
+async function planoAtual() {
+  if (process.env.PLANO_ENFORCE === 'off') return 'completo';
+  if (!planoCache || Date.now() - planoAt > 5000) { const st = await store.settings(); planoCache = { plano: PL.nome(st.plano), empresa: st.empresa_nome || 'Rose Mercearia e Bazar' }; planoAt = Date.now(); }
+  return planoCache.plano;
+}
+async function empresaNome() { await planoAtual(); return (planoCache && planoCache.empresa) || 'Rose Mercearia e Bazar'; }
 async function access(u) {
   const map = await rolesMap();
   const id = map[profileOf(u)] ? profileOf(u) : (P.LEGACY[u.role] || 'caixa_atual');
   const profile = map[id] || P.PRESETS[id];
   // o administrador sempre tem tudo, mesmo que o perfil tenha sido editado por engano
-  const set = id === 'administrador' ? new Set(P.ALL) : P.effective(profile, u);
-  return { id, label: profile.label, set };
+  const bruto = id === 'administrador' ? new Set(P.ALL) : P.effective(profile, u);
+  const plano = await planoAtual();
+  return { id, label: profile.label, set: PL.limit(plano, id, bruto, u), plano };
 }
+/* quem está fazendo a operação, para o histórico (nome do perfil na hora da ação) */
+async function actorOf(u) {
+  let perfil = roleOf(u);
+  try { if (V2) perfil = (await access(u)).label; } catch (e) { /* usa o papel antigo */ }
+  return { id: u.id, name: u.name, perfil };
+}
+/* evento administrativo no histórico. Não recebe senhas. Falha do histórico aqui não derruba a operação, mas aparece no log do servidor. */
+async function aud(me, acao, alvo, registro, resumo, antes, depois, detalhe) {
+  try { await store.audit([AUDIT.event(await actorOf(me), acao, alvo, registro, resumo, antes, depois, detalhe)]); } catch (e) { console.error('histórico:', e.message); }
+}
+const userView = (u) => ({ usuario: u.username, nome: u.name, perfil: u.role_id || u.role, ativo: u.active, arquivado: !!u.archived, conceder: u.perm_grant || [], negar: u.perm_deny || [] });
 async function perms(u) {
   if (!V2) { const r = ROLES[roleOf(u)]; return { role: roleOf(u), label: r.label, tabs: r.tabs, users: r.users, data: r.data, perm: [] }; }
   const ac = await access(u);
@@ -290,6 +312,7 @@ async function handleOwnPassword(req, res, me) {
   const pass = String(b.nova || '');
   if (pass.length < 8) return send(res, 400, { error: 'A nova senha precisa ter pelo menos 8 caracteres.' });
   await store.updateUser(me.id, { pass: await hashPassword(pass), pwv: me.pwv + 1 });
+  await aud(me, 'senha_propria', 'usuarios', me.id, me.name + ' trocou a própria senha', null, null);
   const fresh = (await users(true)).find((x) => x.id === me.id);
   return send(res, 200, { ok: true }, { 'Set-Cookie': makeCookie(fresh, req) });
 }
@@ -309,7 +332,9 @@ async function handleUsers(req, res, me, id) {
     const name = String(b.nome || '').trim().slice(0, 60);
     const pass = String(b.senha || '');
     let role_id = String(b.perfil || '');
+    if (PL.PERFIS_INTERNOS.includes(role_id) && (await planoAtual()) !== 'completo') return send(res, 400, { error: 'Perfil de uso interno não pode ser usado neste plano.' });
     if (!map[role_id]) role_id = b.papel === 'admin' ? 'administrador' : b.papel === 'gerente' ? 'gerente_atual' : 'caixa_vendas';
+    if (PL.PERFIS_INTERNOS.includes(role_id) && (await planoAtual()) !== 'completo') return send(res, 400, { error: 'Perfil de uso interno não pode ser usado neste plano.' });
     if (!USERNAME.test(username)) return send(res, 400, { error: 'O usuário precisa ter de 3 a 30 caracteres: letras minúsculas, números, ponto, traço ou sublinhado, sem espaços.' });
     if (!name) return send(res, 400, { error: 'Informe o nome.' });
     if (pass.length < 8) return send(res, 400, { error: 'A senha precisa ter pelo menos 8 caracteres.' });
@@ -317,6 +342,7 @@ async function handleUsers(req, res, me, id) {
     const u = { id: 'u' + crypto.randomBytes(6).toString('hex'), username, name, pass: await hashPassword(pass), role: P.LEGACY_ROLE(role_id), role_id, perm_grant: validPerms(b.conceder), perm_deny: validPerms(b.negar), active: true, pwv: 1 };
     await store.createUser(u);
     await users(true);
+    await aud(me, 'usuario_criar', 'usuarios', u.id, 'Usuário ' + u.username + ' criado', null, userView(u));
     return send(res, 201, { user: publicUser(u) });
   }
   if (id && req.method === 'PATCH') {
@@ -337,6 +363,7 @@ async function handleUsers(req, res, me, id) {
       if (!map[role_id]) return send(res, 400, { error: 'Perfil inválido.' });
       const next = { ...u, role_id, perm_grant: b.conceder !== undefined ? validPerms(b.conceder) : u.perm_grant || [], perm_deny: b.negar !== undefined ? validPerms(b.negar) : u.perm_deny || [] };
       if (wasAdmin && !(await access(next)).set.has('usuarios.gerir') && (isLastAdmin || u.id === me.id)) return send(res, 400, { error: 'É preciso ter pelo menos uma administradora ativa.' });
+      if (PL.PERFIS_INTERNOS.includes(role_id) && (await planoAtual()) !== 'completo') return send(res, 400, { error: 'Perfil de uso interno não pode ser usado neste plano.' });
       f.role_id = role_id;
       f.role = P.LEGACY_ROLE(role_id);
       f.perm_grant = next.perm_grant;
@@ -366,6 +393,11 @@ async function handleUsers(req, res, me, id) {
     }
     await store.updateUser(u.id, f);
     const fresh = (await users(true)).find((x) => x.id === u.id);
+    {
+      const acao = f.archived === true ? 'usuario_arquivar' : f.archived === false && u.archived ? 'usuario_reativar' : f.pass ? 'usuario_senha' : f.active === false ? 'usuario_desativar' : f.active === true ? 'usuario_ativar' : 'usuario_alterar';
+      const antes = userView(u), depois = userView(fresh);
+      await aud(me, acao, 'usuarios', u.id, 'Usuário ' + u.username + ' (' + acao.replace('usuario_', '').replace('senha', 'senha redefinida') + ')', antes, depois, f.pass ? { senha_redefinida: true } : null);
+    }
     const headers = fresh.id === me.id && f.pwv ? { 'Set-Cookie': makeCookie(fresh, req) } : {};
     return send(res, 200, { user: publicUser(fresh) }, headers);
   }
@@ -376,6 +408,7 @@ async function handleUsers(req, res, me, id) {
     if (u.active) return send(res, 400, { error: 'Desative ou arquive o usuário antes de excluir.' });
     await store.deleteUser(u.id);
     await users(true);
+    await aud(me, 'usuario_excluir', 'usuarios', u.id, 'Usuário ' + u.username + ' excluído', userView(u), null);
     return send(res, 200, { ok: true });
   }
   return send(res, 405, { error: 'método não permitido' });
@@ -393,6 +426,7 @@ async function handleRoles(req, res, me, id) {
     const nid = 'p_' + crypto.randomBytes(4).toString('hex');
     await store.saveRole({ id: nid, label, perms: validPerms(b.perms), system: false });
     await rolesMap(true);
+    await aud(me, 'perfil_criar', 'perfis', nid, 'Perfil ' + label + ' criado', null, { nome: label, perms: validPerms(b.perms) });
     return send(res, 201, { ok: true, id: nid });
   }
   if (req.method === 'PUT' && id) {
@@ -405,6 +439,7 @@ async function handleRoles(req, res, me, id) {
     if (r.perms.includes('usuarios.gerir') && !perms.includes('usuarios.gerir')) return send(res, 400, { error: 'Este perfil não pode perder o gerenciamento de usuários.' });
     await store.saveRole({ id, label: b.nome ? String(b.nome).trim().slice(0, 40) : r.label, perms, system: r.system });
     await rolesMap(true);
+    await aud(me, 'perfil_alterar', 'perfis', id, 'Perfil ' + r.label + ' alterado', { nome: r.label, perms: r.perms }, { nome: b.nome ? String(b.nome).trim().slice(0, 40) : r.label, perms });
     await users(true);
     return send(res, 200, { ok: true });
   }
@@ -447,7 +482,9 @@ async function handleEstoque(req, res, parts, me) {
     const b = await readJson(req, 2000);
     if (!['off', 'aviso', 'bloqueio'].includes(b.modo)) return send(res, 400, { error: 'Modo inválido.' });
     if (b.modo === 'bloqueio' && b.confirmo !== true) return send(res, 400, { error: 'Confirme que os saldos foram conferidos antes de ligar o bloqueio.' });
+    const modoAntes = (await store.settings()).estoque_modo;
     await store.setSetting('estoque_modo', b.modo);
+    await aud(me, 'config', 'estoque', 'estoque_modo', 'Proteção de estoque: ' + modoAntes + ' → ' + b.modo, modoAntes, b.modo);
     if (b.modo === 'aviso') await store.setSetting('estoque_aviso_desde', new Date().toISOString());
     return send(res, 200, { ok: true, modo: b.modo });
   }
@@ -474,6 +511,7 @@ async function handleEstoque(req, res, parts, me) {
     const a = (await users(true)).find((x) => x.username === String(b.usuario || '').trim().toLowerCase());
     const ok = await checkPassword(String(b.senha || ''), a ? a.pass : DUMMY_HASH);
     if (!a || !ok || !a.active || !(await access(a)).set.has('estoque.excecao')) { failed(ip); failed(who); return send(res, 403, { error: 'Usuário ou senha de administrador incorretos.' }); }
+    await aud(me, 'estoque_excecao', 'estoque', a.id, a.name + ' autorizou uma exceção de estoque para ' + me.name, null, null, { justificativa: just });
     return send(res, 200, { token: makeExcecaoToken(a, me, just), por: a.name });
   }
   return send(res, 404, { error: 'não encontrado' });
@@ -486,6 +524,7 @@ async function handleData(req, res, parts, me) {
   if (!col || !SEG.test(col)) return send(res, 400, { error: 'coleção inválida' });
   const ac = V2 ? await access(me) : null;
   const legacy = ROLES[roleOf(me)];
+  const actor = { id: me.id, name: me.name, perfil: ac ? ac.label : legacy.label };
   if (parts.length === 3 && req.method === 'GET') {
     const [docs, version] = await Promise.all([store.list(col), store.version()]);
     if (!V2) return send(res, 200, { version, docs });
@@ -528,7 +567,7 @@ async function handleData(req, res, parts, me) {
       if (!V2 && !legacy.del && docs[id].some((o) => o && (o.op === 'del' || o.op === 'list'))) return send(res, 403, { error: `O perfil ${legacy.label} não pode apagar registros.` });
     }
     if (!V2) {
-      const out = await store.applyBatch(col, docs, { bulk: body.bulk === true && roleOf(me) === 'admin' });
+      const out = await store.applyBatch(col, docs, { bulk: body.bulk === true && roleOf(me) === 'admin', actor });
       if (!out.ok) return send(res, 409, { error: 'Outra pessoa alterou os mesmos registros.', conflicts: out.conflicts });
       return send(res, 200, { version: out.version || (await store.version()), assigned: out.assigned, changed: out.changed });
     }
@@ -537,7 +576,7 @@ async function handleData(req, res, parts, me) {
     const pre = bulk ? null : P.checkWrite(ac.set, docs); // recusa cedo, sem abrir transação
     if (pre) return send(res, 403, { error: pre });
     const g = await guardFor(body.excecao, bulk);
-    const out = await store.applyBatch(col, docs, { bulk, guard: bulk ? null : g.guard });
+    const out = await store.applyBatch(col, docs, { bulk, guard: bulk ? null : g.guard, actor });
     if (out.abort) return answerAbort(out);
     if (!out.ok) return send(res, 409, { error: 'Outra pessoa alterou os mesmos registros.', conflicts: out.conflicts });
     if (g.excecao) usedTokens.add(g.excecao.nonce);
@@ -561,7 +600,7 @@ async function handleData(req, res, parts, me) {
               if (!legacy.del && ops.some((o) => o.op === 'del' || o.op === 'list')) throw Object.assign(new Error('sem permissão'), { perm: true });
               return ops;
             },
-          }, {});
+          }, { actor });
           return send(res, 200, { version: out.version || (await store.version()) });
         } catch (e) {
           if (e && e.perm) return send(res, 403, { error: `O perfil ${legacy.label} não pode apagar registros.` });
@@ -569,7 +608,7 @@ async function handleData(req, res, parts, me) {
         }
       }
       const g = await guardFor(null, false);
-      const out = await store.applyBatch(col, { [id]: (cur) => D.diffDoc(id, cur, data) }, { guard: g.guard });
+      const out = await store.applyBatch(col, { [id]: (cur) => D.diffDoc(id, cur, data) }, { guard: g.guard, actor });
       if (out.abort) return answerAbort(out);
       return send(res, 200, { version: out.version || (await store.version()) });
     }
@@ -578,15 +617,32 @@ async function handleData(req, res, parts, me) {
       const mes = /^(vendas|notas)-\d{4}-\d{2}$/.test(id);
       if (V2 && mes && !ac.set.has('dados.apagar')) {
         const g = await guardFor(null, false);
-        const out = await store.applyBatch(col, { [id]: (cur) => ((cur && cur.items) || []).map((r) => ({ k: 'items', op: 'del', id: String(r.id), before: r })) }, { guard: g.guard });
+        const out = await store.applyBatch(col, { [id]: (cur) => ((cur && cur.items) || []).map((r) => ({ k: 'items', op: 'del', id: String(r.id), before: r })) }, { guard: g.guard, actor });
         if (out.abort) return answerAbort(out);
         return send(res, 200, { version: out.version || (await store.version()) });
       }
       if (V2 && !ac.set.has('dados.apagar')) return send(res, 403, { error: 'Seu perfil não pode apagar documentos.' });
-      return send(res, 200, { version: await store.remove(col, id) });
+      return send(res, 200, { version: await store.remove(col, id, { actor }) });
     }
   }
   return send(res, 405, { error: 'método não permitido' });
+}
+
+/* ---------- histórico de alterações (somente leitura) ---------- */
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+async function handleHistorico(req, res, me, id) {
+  const ok = V2 ? (await access(me)).set.has('auditoria.ver') : roleOf(me) === 'admin';
+  if (!ok) return send(res, 403, { error: 'Seu perfil não pode ver o histórico.' });
+  if (req.method !== 'GET') return send(res, 405, { error: 'O histórico só pode ser consultado.' });
+  if (id) {
+    if (!/^\d{1,12}$/.test(id)) return send(res, 400, { error: 'registro inválido' });
+    const r = await store.auditGet(id);
+    return r ? send(res, 200, { item: r }) : send(res, 404, { error: 'Registro do histórico não encontrado.' });
+  }
+  const q = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
+  if ((q.de && !ISO_DAY.test(q.de)) || (q.ate && !ISO_DAY.test(q.ate))) return send(res, 400, { error: 'Data inválida.' });
+  const items = await store.auditList({ alvo: q.alvo, registro: q.registro, user: q.usuario, acao: q.acao, de: q.de, ate: q.ate, q: q.q, antes_de: q.antes_de, limit: q.limite });
+  return send(res, 200, { items, total: await store.auditCount() });
 }
 
 /* ---------- arquivos ---------- */
@@ -621,10 +677,11 @@ const server = http.createServer(async (req, res) => {
     const parts = p.split('/').filter(Boolean);
     if (!me) return parts[0] === 'api' ? send(res, 401, { error: 'Entre com seu usuário e senha.' }) : redirect(res, '/login');
     if (parts[0] === 'api') {
-      if (parts[1] === 'me' && parts.length === 2 && req.method === 'GET') return send(res, 200, { user: { ...publicUser(me), ...(await perms(me)) } });
+      if (parts[1] === 'me' && parts.length === 2 && req.method === 'GET') return send(res, 200, { user: { ...publicUser(me), ...(await perms(me)), plano: await planoAtual(), empresa: await empresaNome() } });
       if (parts[1] === 'senha' && parts.length === 2 && req.method === 'POST') return await handleOwnPassword(req, res, me);
       if (parts[1] === 'perfis' && parts.length <= 3) return await handleRoles(req, res, me, parts[2]);
       if (parts[1] === 'estoque') return await handleEstoque(req, res, parts, me);
+      if (parts[1] === 'historico' && parts.length <= 3) return await handleHistorico(req, res, me, parts[2]);
       if (parts[1] === 'usuarios' && parts.length <= 3) return await handleUsers(req, res, me, parts[2]);
       if (parts[1] === 'col') return await handleData(req, res, parts, me);
       return send(res, 404, { error: 'não encontrado' });
@@ -632,7 +689,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/' || p === '/index.html') return serveFile(req, res, '/index.html');
     if (p === '/usuarios') return (await canManageUsers(me)) ? serveFile(req, res, '/usuarios.html') : redirect(res, '/');
     if (p === '/estoque-conferencia') return (V2 ? (await access(me)).set.has('estoque.conferir') : ROLES[roleOf(me)].users) ? serveFile(req, res, '/conferencia.html') : redirect(res, '/');
-    if (p === '/login.html' || p === '/usuarios.html' || p === '/conferencia.html') return redirect(res, '/');
+    if (p === '/historico') return (V2 ? (await access(me)).set.has('auditoria.ver') : roleOf(me) === 'admin') ? serveFile(req, res, '/historico.html') : redirect(res, '/');
+    if (p === '/login.html' || p === '/usuarios.html' || p === '/conferencia.html' || p === '/historico.html') return redirect(res, '/');
     return serveFile(req, res, p);
   } catch (e) {
     if (!e.status) console.error(e);

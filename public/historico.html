@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Histórico de alterações · Rose</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>
+/* Mesma identidade do sistema. Mobile first: cartões empilhados; duas colunas a partir de 900px. */
+:root{color-scheme:light dark;--bg:light-dark(#fff,#160b0d);--ink:light-dark(#1d1416,#f4e9ea);--mut:light-dark(#6b5d60,#b39fa3);--line:light-dark(#efe4e5,#3a2226);--mist:light-dark(#fbf1f2,#241215);--card:light-dark(#fff,#1d0f12);--g:light-dark(#8e1230,#d9536f);--gd:light-dark(#1f7a4d,#62d39b);--okb:light-dark(#e8f5ee,#12291d);--red:light-dark(#c2410c,#ff9a6b);--gold:#e5a91a}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif}
+.top{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line);box-shadow:inset 0 3px 0 var(--gold)}
+.tb{display:flex;align-items:center;gap:10px;padding:12px 16px;max-width:1100px;margin:0 auto}
+.brand{margin-right:auto;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}.brand svg{width:34px;height:34px}
+.brand b{font:italic 700 24px/1 "Playfair Display",Georgia,serif;color:var(--g)}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 40px}
+h1{font:700 28px/1.15 "Playfair Display",Georgia,serif;margin:0 0 6px}h2{font:700 20px/1.2 "Playfair Display",Georgia,serif;margin:0 0 12px}
+.lead{color:var(--mut);margin:0 0 20px}
+.grid{display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin:0 0 12px}
+input,select{display:block;width:100%;margin-top:4px;font:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:46px;padding:8px 12px}
+.btn{font:inherit;font-weight:600;min-height:44px;padding:8px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.btn.pri{background:var(--g);border-color:var(--g);color:#fff}.btn.sm{min-height:38px;padding:6px 12px;font-size:14px}.btn.dng{color:var(--red)}
+input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid var(--g);outline-offset:2px}
+.user{border-bottom:1px solid var(--line);padding:14px 0}.user:last-child{border-bottom:0}
+.uh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.uh b{font-size:17px}.uh small{display:block;color:var(--mut);font-size:13px}
+.bd{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;white-space:nowrap;margin-left:4px}
+.bd.admin{background:light-dark(#fbe7ea,#3a1218);color:var(--g)}.bd.gerente{background:light-dark(#fff3dc,#33240a);color:light-dark(#8a5a00,#f2b450)}.bd.caixa{background:light-dark(#eef1f4,#16241d);color:var(--mut)}
+.mx{width:100%;border-collapse:collapse;font-size:14px}.mx th,.mx td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}.mx th:first-child,.mx td:first-child{text-align:left}.mx th{font-size:12px;color:var(--mut);font-weight:600}.sim{color:var(--gd);font-weight:700}.nao{color:var(--mut)}
+.rsel{display:inline-block;width:auto;min-height:38px;margin:0;padding:4px 10px;font-size:14px}.bd.off{background:light-dark(#fdecea,#3a1712);color:var(--red)}
+.pm{display:grid;gap:4px;margin:8px 0}.pm h4{margin:10px 0 2px;font-size:13px;color:var(--mut)}.pm label{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--ink);margin:0;font-size:14px}.pm input{width:auto;min-height:0;margin:0}.pm .ch{color:var(--g);font-weight:700}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.inline{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;background:var(--mist);border-radius:12px;padding:10px}.inline label{flex:1 1 200px;margin:0}
+.msg{font-weight:600;min-height:22px;margin:8px 0 0}.msg.ok{color:var(--gd)}.msg.err{color:var(--red)}
+.note{background:var(--mist);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--mut)}
+@media(min-width:900px){.grid{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:start}h1{font-size:32px}}
+</style>
+<style>.tb2{width:100%;border-collapse:collapse;font-size:14px}.tb2 th,.tb2 td{padding:8px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.tb2 .n{text-align:right;white-space:nowrap}.tb2 th{font-size:12px;color:var(--mut);position:sticky;top:0;background:var(--card)}.sc{overflow:auto;max-height:60vh}.bad{color:var(--red);font-weight:600}.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--mist)}.kp{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:12px 0}.kp div{background:var(--mist);border-radius:12px;padding:12px}.kp b{display:block;font-size:22px}@media(min-width:900px){.grid{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<header class="top"><div class="tb">
+ <a class="brand" href="/" aria-label="Voltar ao sistema"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="var(--g)"/><circle cx="24" cy="24" r="19.5" fill="none" stroke="var(--gold)" stroke-width="1.5"/><path d="M12 15h3.5l3 13.5h13.5l2.8-9.5H17.2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 22.5h13M20.5 25.5h11" stroke="var(--gold)" stroke-width="1.6" stroke-linecap="round"/><circle cx="20.5" cy="33" r="2" fill="var(--gold)"/><circle cx="30" cy="33" r="2" fill="var(--gold)"/></svg><b>Rose</b></a>
+ <a class="btn sm" href="/">Voltar ao sistema</a>
+</div></header>
+<main class="wrap">
+ <h1>Histórico de alterações</h1>
+ <p class="lead">Quem fez o quê e quando. Somente consulta: ninguém altera nem apaga este registro.</p>
+ <div class="grid">
+  <section class="card"><h2>Filtros</h2>
+   <div class="inline" style="margin-top:0">
+    <label>Buscar no resumo<input id="fq" type="search" placeholder="ex.: Venda nº 12"></label>
+    <label>Área<select id="fa"><option value="">Todas</option><option value="vendas">Vendas</option><option value="notas">Notas fiscais</option><option value="compras">Compras</option><option value="lancamentos">Contas a pagar/receber</option><option value="caixas">Caixa</option><option value="movimentos">Estoque (movimentos)</option><option value="cadastros">Cadastros</option><option value="usuarios">Usuários</option><option value="perfis">Perfis</option><option value="estoque">Proteção de estoque</option></select></label>
+    <label>Usuário (código)<input id="fu" placeholder="opcional"></label>
+    <label>De<input id="fd" type="date"></label>
+    <label>Até<input id="ft" type="date"></label>
+    <button class="btn pri" id="bf" type="button">Filtrar</button>
+   </div>
+   <p class="msg" id="msg" role="status"></p>
+  </section>
+  <section class="card"><div class="uh"><h2>Registros</h2><small id="tot" style="color:var(--mut)"></small></div>
+   <div class="sc"><table class="tb2"><thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>O quê</th><th></th></tr></thead><tbody id="linhas"></tbody></table></div>
+   <div class="acts"><button class="btn" id="mais" type="button" hidden>Carregar mais</button></div>
+  </section>
+  <section class="card" id="det" hidden><h2>Detalhe</h2><div id="dd"></div></section>
+ </div>
+</main>
+<script>
+{
+ const $=s=>document.querySelector(s);
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const dt=s=>s?new Date(s).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'medium'}):'—';
+ const AC={criar:'Criou',alterar:'Alterou',excluir:'Excluiu',lista:'Alterou lista',config:'Configuração',apagar_documento:'Apagou documento',usuario_criar:'Criou usuário',usuario_alterar:'Alterou usuário',usuario_excluir:'Excluiu usuário',usuario_arquivar:'Arquivou usuário',usuario_reativar:'Reativou usuário',usuario_desativar:'Desativou usuário',usuario_ativar:'Ativou usuário',usuario_senha:'Redefiniu senha',senha_propria:'Trocou a própria senha',perfil_criar:'Criou perfil',perfil_alterar:'Alterou perfil',estoque_excecao:'Exceção de estoque'};
+ let ult=null;
+ async function api(url){const r=await fetch(url,{credentials:'same-origin'});if(r.status===401){location.replace('/login');throw new Error('Sessão encerrada.')}let j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.error||('Erro '+r.status));return j}
+ function qs(extra){const p=new URLSearchParams();[['q','fq'],['alvo','fa'],['usuario','fu'],['de','fd'],['ate','ft']].forEach(([k,i])=>{const v=$('#'+i).value.trim();if(v)p.set(k,v)});if(extra)Object.entries(extra).forEach(([k,v])=>p.set(k,v));p.set('limite','100');return p.toString()}
+ const row=x=>`<tr><td>${esc(dt(x.at))}</td><td>${esc(x.user_name||'—')}<small style="display:block;color:var(--mut)">${esc(x.perfil||'')}</small></td><td><span class="pill">${esc(AC[x.acao]||x.acao)}</span></td><td>${esc(x.resumo||x.alvo)}</td><td><button class="btn sm" data-id="${esc(x.id)}" type="button">Ver</button></td></tr>`;
+ async function load(mais){
+  const m=$('#msg');m.textContent='';m.className='msg';
+  try{const j=await api('/api/historico?'+qs(mais&&ult?{antes_de:ult}:null));
+   $('#linhas').innerHTML=(mais?$('#linhas').innerHTML:'')+j.items.map(row).join('')||'<tr><td colspan="5">Nada encontrado.</td></tr>';
+   if(j.items.length)ult=j.items[j.items.length-1].id;
+   $('#mais').hidden=j.items.length<100;$('#tot').textContent=j.total+' registro(s) no total';
+  }catch(e){m.textContent=e.message;m.className='msg err'}
+ }
+ const pre=v=>v==null?'<p class="lead">—</p>':'<pre style="white-space:pre-wrap;word-break:break-word;background:var(--mist);border-radius:12px;padding:10px;font-size:13px;max-height:40vh;overflow:auto">'+esc(JSON.stringify(v,null,2))+'</pre>';
+ document.addEventListener('click',async e=>{const b=e.target.closest('[data-id]');if(!b)return;
+  try{const {item:x}=await api('/api/historico/'+encodeURIComponent(b.dataset.id));$('#det').hidden=false;
+   $('#dd').innerHTML=`<p><b>${esc(x.resumo||x.alvo)}</b><br><small style="color:var(--mut)">${esc(dt(x.at))} · ${esc(x.user_name||'—')} (${esc(x.perfil||'')}) · ${esc(AC[x.acao]||x.acao)}</small></p><h3>Antes</h3>${pre(x.antes)}<h3>Depois</h3>${pre(x.depois)}${x.detalhe?'<h3>Detalhes</h3>'+pre(x.detalhe):''}`;$('#det').scrollIntoView({behavior:'smooth'})}catch(err){$('#msg').textContent=err.message;$('#msg').className='msg err'}});
+ $('#bf').addEventListener('click',()=>{ult=null;load(false)});$('#mais').addEventListener('click',()=>load(true));
+ load(false);
+}
+</script>
+</body>
+</html>

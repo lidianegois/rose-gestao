@@ -23,3 +23,15 @@ PORT=3112 node test/e2e-perfis.js                                              #
 # rollback: com o código da Etapa 1 em /tmp/old (git archive 29aaaf1), depois do etapa2.test.js
 PGHOST=/tmp/pgsock PGPORT=5433 NODE_PATH=test/shim node test/rollback.test.js
 ```
+
+## Piloto do plano Básico (local)
+
+```bash
+export PGHOST=/tmp/pgsock PGPORT=5433 NODE_PATH=test/shim
+node test/piloto-basico.test.js          # API: plano, perfis, TI-Lidiane, estoque negativo em banco isolado (t_pneg)
+node test/e2e-roteiro.js basico          # navegador: roteiro de 7 dias, Rose (plano Básico), banco t_rot_basico
+node test/e2e-roteiro.js completo        # navegador: mesmo roteiro, TI-Lidiane (plano Completo), banco t_rot_completo
+```
+
+Só dados fictícios; cada cenário cria o próprio banco e uma cópia do site em `/tmp/rot_<cenario>` com o gancho de teste.
+O `e2e-perfis.js` espera um banco já com mais de 5 produtos (rode depois do `e2e-simultaneo.js` num banco novo).

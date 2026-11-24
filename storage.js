@@ -13,6 +13,7 @@ const D = require('./public/docdiff.js');
 const B = require('./lib/batch.js');
 const P = require('./lib/perms.js');
 const STK = require('./lib/stock.js');
+const AUDIT = require('./lib/audit.js');
 
 function createStore() {
   return process.env.DATABASE_URL ? pgStore(process.env.DATABASE_URL) : fileStore(path.join(__dirname, 'data'));
@@ -109,6 +110,11 @@ function pgStore(url) {
         const pl = B.plan(cur, counters, ops, opts);
         if (pl.conflicts.length) { await c.query('ROLLBACK'); return { ok: false, conflicts: pl.conflicts }; }
         if (logs.length) await insertLog(c, logs);
+        if (AUDIT.ENABLED()) { // histórico na mesma transação: sem rastro, não grava
+          const rows = [];
+          for (const id of ids) if (pl.updates[id]) rows.push(...AUDIT.rowsForDoc(opts && opts.actor, id, cur[id], pl.updates[id]));
+          if (rows.length) await AUDIT.insertRows(c, rows);
+        }
         for (const id of ids) {
           if (pl.updates[id]) {
             await c.query('UPDATE app_docs SET data = $3::jsonb, rev = rev + 1, updated_at = now() WHERE col = $1 AND id = $2', [col, id, JSON.stringify(pl.updates[id])]);
@@ -159,11 +165,43 @@ function pgStore(url) {
     async deleteUser(id) {
       await pool.query('DELETE FROM app_users WHERE id = $1', [id]);
     },
-    async remove(col, id) {
-      await pool.query('DELETE FROM app_docs WHERE col = $1 AND id = $2', [col, id]);
-      const r = await pool.query("SELECT nextval('app_docs_rev') AS v");
-      return String(r.rows[0].v);
+    async remove(col, id, opts) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        const old = await c.query('SELECT data FROM app_docs WHERE col = $1 AND id = $2 FOR UPDATE', [col, id]);
+        if (old.rows.length && AUDIT.ENABLED()) await AUDIT.insertRows(c, [AUDIT.rowForDocDeleted(opts && opts.actor, id, old.rows[0].data)]);
+        await c.query('DELETE FROM app_docs WHERE col = $1 AND id = $2', [col, id]);
+        const r = await c.query("SELECT nextval('app_docs_rev') AS v");
+        await c.query('COMMIT');
+        return String(r.rows[0].v);
+      } catch (e) {
+        try { await c.query('ROLLBACK'); } catch (x) { /* conexão já encerrada */ }
+        throw e;
+      } finally { c.release(); }
     },
+    // eventos administrativos (usuários, perfis, configurações): nunca recebem senhas
+    async audit(rows) { if (AUDIT.ENABLED() && rows.length) await AUDIT.insertRows(pool, rows); },
+    async auditList(f) {
+      const w = [], v = [];
+      const add = (sql, val) => { v.push(val); w.push(sql.replace('?', '$' + v.length)); };
+      if (f.alvo) add('alvo LIKE ?', String(f.alvo).replace(/[%_\\]/g, '\\$&') + '%');
+      if (f.registro) add('registro = ?', String(f.registro));
+      if (f.user) add('user_id = ?', String(f.user));
+      if (f.acao) add('acao = ?', String(f.acao));
+      if (f.de) add('at >= ?', f.de);
+      if (f.ate) add("at < (?::date + 1)", f.ate);
+      if (f.q) add("resumo ILIKE ?", '%' + String(f.q).replace(/[%_\\]/g, '\\$&') + '%');
+      if (f.antes_de) add('id < ?', Number(f.antes_de));
+      const lim = Math.min(Math.max(parseInt(f.limit, 10) || 100, 1), 500);
+      const r = await pool.query('SELECT id, at, user_id, user_name, perfil, acao, alvo, lista, registro, resumo, detalhe FROM audit_log' + (w.length ? ' WHERE ' + w.join(' AND ') : '') + ' ORDER BY id DESC LIMIT ' + lim, v);
+      return r.rows;
+    },
+    async auditGet(id) {
+      const r = await pool.query('SELECT * FROM audit_log WHERE id = $1', [Number(id)]);
+      return r.rows[0] || null;
+    },
+    async auditCount() { return Number((await pool.query('SELECT count(*) AS n FROM audit_log')).rows[0].n); },
     close() {
       return pool.end();
     },
@@ -222,6 +260,11 @@ function fileStore(dir) {
         const pl = B.plan(cur, state.counters, ops, opts);
         if (pl.conflicts.length) return { ok: false, conflicts: pl.conflicts };
         if (logs.length) this.stockLogSync(logs, true);
+        if (AUDIT.ENABLED()) {
+          const rows = [];
+          for (const id of Object.keys(pl.updates)) rows.push(...AUDIT.rowsForDoc(opts && opts.actor, id, cur[id], pl.updates[id]));
+          this.auditSync(rows);
+        }
         for (const id of Object.keys(pl.updates)) {
           docs[id] = pl.updates[id];
           state.revs[col + '/' + id] = ((state.revs[col + '/' + id]) || 1) + 1;
@@ -279,8 +322,26 @@ function fileStore(dir) {
         save();
       });
     },
-    remove(col, id) {
+    auditSync(rows) { state.audit = state.audit || []; rows.forEach((r) => state.audit.push({ id: state.audit.length + 1, at: new Date().toISOString(), ...r })); },
+    async audit(rows) { if (AUDIT.ENABLED() && rows.length) { this.auditSync(rows); save(); } },
+    async auditList(f) {
+      let l = (state.audit || []).slice().reverse();
+      if (f.alvo) l = l.filter((x) => x.alvo.startsWith(f.alvo));
+      if (f.registro) l = l.filter((x) => x.registro === String(f.registro));
+      if (f.user) l = l.filter((x) => x.user_id === f.user);
+      if (f.acao) l = l.filter((x) => x.acao === f.acao);
+      if (f.de) l = l.filter((x) => x.at.slice(0, 10) >= f.de);
+      if (f.ate) l = l.filter((x) => x.at.slice(0, 10) <= f.ate);
+      if (f.q) l = l.filter((x) => (x.resumo || '').toLowerCase().includes(String(f.q).toLowerCase()));
+      if (f.antes_de) l = l.filter((x) => x.id < Number(f.antes_de));
+      const lim = Math.min(Math.max(parseInt(f.limit, 10) || 100, 1), 500);
+      return l.slice(0, lim).map(({ antes, depois, ...x }) => x);
+    },
+    async auditGet(id) { return (state.audit || []).find((x) => x.id === Number(id)) || null; },
+    async auditCount() { return (state.audit || []).length; },
+    remove(col, id, opts) {
       return serial(() => {
+        if (state.cols[col] && state.cols[col][id] !== undefined && AUDIT.ENABLED()) this.auditSync([AUDIT.rowForDocDeleted(opts && opts.actor, id, state.cols[col][id])]);
         if (state.cols[col]) delete state.cols[col][id];
         state.rev++;
         save();

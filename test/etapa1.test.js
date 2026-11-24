@@ -17,9 +17,11 @@ const dados = async (s, id) => ((await s.list('loja')).find((d) => d.id === id) 
   /* ---------- 1. migrações ---------- */
   fresh('t_mig');
   let s = await open('t_mig');
-  ok('migrações aplicadas em banco vazio', PSQL('t_mig', "select count(*) from schema_migrations") === '4');
+  const NMIG = String(require('fs').readdirSync('db/migrations').filter((f) => /^\d+_.*\.sql$/.test(f)).length);
+  ok('migrações aplicadas em banco vazio (todas as dos arquivos, incluindo a 004)', PSQL('t_mig', "select count(*) from schema_migrations") === NMIG && PSQL('t_mig', "select count(*) from schema_migrations where version='004'") === '1');
+  ok('migração 004 criou a tabela audit_log vazia', PSQL('t_mig', "select count(*) from audit_log") === '0');
   await s.close(); s = await open('t_mig');
-  ok('segunda inicialização não reaplica', PSQL('t_mig', "select count(*) from schema_migrations") === '4');
+  ok('segunda inicialização não reaplica', PSQL('t_mig', "select count(*) from schema_migrations") === NMIG);
   ok('coluna rev e contadores existem', PSQL('t_mig', "select count(*) from information_schema.columns where table_name='app_docs' and column_name='rev'") === '1' && PSQL('t_mig', 'select count(*) from app_counters') === '2');
   await s.close();
 
@@ -32,6 +34,7 @@ const dados = async (s, id) => ((await s.list('loja')).find((d) => d.id === id) 
   for (const [id, d] of Object.entries(antes)) PSQL('t_dados', `insert into app_docs(col,id,data) values ('loja','${id}','${JSON.stringify(d).replace(/'/g, "''")}'::jsonb)`);
   const sumAntes = PSQL('t_dados', "select md5(string_agg(id||md5(data::text),'' order by id)) from app_docs");
   s = await open('t_dados');
+  ok('migração 004 aplicada sobre os dados existentes, com audit_log vazia', PSQL('t_dados', "select count(*) from schema_migrations where version='004'") === '1' && PSQL('t_dados', 'select count(*) from audit_log') === '0');
   ok('migração sobre dados: dados idênticos', PSQL('t_dados', "select md5(string_agg(id||md5(data::text),'' order by id)) from app_docs") === sumAntes);
   ok('contador de vendas = maior número existente (120)', PSQL('t_dados', "select value from app_counters where name='venda'") === '120');
   ok('contador de compras = 7', PSQL('t_dados', "select value from app_counters where name='compra'") === '7');
