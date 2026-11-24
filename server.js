@@ -151,7 +151,7 @@ async function perms(u) {
   const ac = await access(u);
   return { role: P.LEGACY_ROLE(ac.id), profile: ac.id, label: ac.label, tabs: P.tabsOf(ac.set), users: ac.set.has('usuarios.gerir'), data: ac.set.has('backup.copiar'), perm: [...ac.set] };
 }
-const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: roleOf(u), profile: profileOf(u), perm_grant: u.perm_grant || [], perm_deny: u.perm_deny || [], active: u.active, created_at: u.created_at, last_login: u.last_login });
+const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: roleOf(u), profile: profileOf(u), perm_grant: u.perm_grant || [], perm_deny: u.perm_deny || [], active: u.active, archived: !!u.archived, created_at: u.created_at, last_login: u.last_login });
 const canManageUsers = async (u) => (V2 ? (await access(u)).set.has('usuarios.gerir') : ROLES[roleOf(u)].users);
 const USERNAME = /^[a-z0-9._-]{3,30}$/;
 
@@ -279,7 +279,15 @@ async function handleUsers(req, res, me, id) {
       if (!active && u.id === me.id) return send(res, 400, { error: 'Você não pode desativar a sua própria conta.' });
       if (!active && isLastAdmin) return send(res, 400, { error: 'É preciso ter pelo menos uma administradora ativa.' });
       f.active = active;
+      if (active) f.archived = false; // reativar tira do arquivo
       if (!active) f.pwv = u.pwv + 1; // derruba as sessões abertas
+    }
+    if (b.arquivado !== undefined) {
+      const arq = !!b.arquivado;
+      if (arq && u.id === me.id) return send(res, 400, { error: 'Você não pode arquivar a sua própria conta.' });
+      if (arq && isLastAdmin) return send(res, 400, { error: 'É preciso ter pelo menos uma administradora ativa.' });
+      f.archived = arq;
+      if (arq) { f.active = false; f.pwv = u.pwv + 1; } // arquivar também desativa e derruba as sessões
     }
     if (b.senha !== undefined) {
       const pass = String(b.senha);
@@ -291,6 +299,15 @@ async function handleUsers(req, res, me, id) {
     const fresh = (await users(true)).find((x) => x.id === u.id);
     const headers = fresh.id === me.id && f.pwv ? { 'Set-Cookie': makeCookie(fresh, req) } : {};
     return send(res, 200, { user: publicUser(fresh) }, headers);
+  }
+  if (id && req.method === 'DELETE') {
+    const u = all.find((x) => x.id === id);
+    if (!u) return send(res, 404, { error: 'Usuário não encontrado.' });
+    if (u.id === me.id) return send(res, 400, { error: 'Você não pode excluir a sua própria conta.' });
+    if (u.active) return send(res, 400, { error: 'Desative ou arquive o usuário antes de excluir.' });
+    await store.deleteUser(u.id);
+    await users(true);
+    return send(res, 200, { ok: true });
   }
   return send(res, 405, { error: 'método não permitido' });
 }

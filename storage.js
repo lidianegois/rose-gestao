@@ -143,18 +143,21 @@ function pgStore(url) {
       return r.version || (await this.version());
     },
     async users() {
-      const r = await pool.query('SELECT id, username, name, pass, role, role_id, perm_grant, perm_deny, active, pwv, created_at, last_login FROM app_users ORDER BY created_at');
+      const r = await pool.query('SELECT id, username, name, pass, role, role_id, perm_grant, perm_deny, active, archived, pwv, created_at, last_login FROM app_users ORDER BY created_at');
       return r.rows;
     },
     async createUser(u) {
       await pool.query('INSERT INTO app_users (id, username, name, pass, role, active, pwv, role_id, perm_grant, perm_deny) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb)', [u.id, u.username, u.name, u.pass, u.role, u.active, u.pwv, u.role_id || null, JSON.stringify(u.perm_grant || []), JSON.stringify(u.perm_deny || [])]);
     },
     async updateUser(id, f) {
-      const keys = Object.keys(f).filter((k) => ['name', 'pass', 'role', 'active', 'pwv', 'last_login', 'role_id', 'perm_grant', 'perm_deny'].includes(k));
+      const keys = Object.keys(f).filter((k) => ['name', 'pass', 'role', 'active', 'archived', 'pwv', 'last_login', 'role_id', 'perm_grant', 'perm_deny'].includes(k));
       if (!keys.length) return;
       const js = (k) => k === 'perm_grant' || k === 'perm_deny';
       const sets = keys.map((k, i) => `${k} = $${i + 2}${js(k) ? '::jsonb' : ''}`).join(', ');
       await pool.query(`UPDATE app_users SET ${sets} WHERE id = $1`, [id, ...keys.map((k) => (js(k) ? JSON.stringify(f[k] || []) : f[k]))]);
+    },
+    async deleteUser(id) {
+      await pool.query('DELETE FROM app_users WHERE id = $1', [id]);
     },
     async remove(col, id) {
       await pool.query('DELETE FROM app_docs WHERE col = $1 AND id = $2', [col, id]);
@@ -267,6 +270,12 @@ function fileStore(dir) {
       return serial(() => {
         const u = (state.users || []).find((x) => x.id === id);
         if (u) Object.assign(u, f);
+        save();
+      });
+    },
+    deleteUser(id) {
+      return serial(() => {
+        state.users = (state.users || []).filter((x) => x.id !== id);
         save();
       });
     },

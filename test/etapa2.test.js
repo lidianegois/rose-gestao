@@ -230,6 +230,26 @@ const saldoDe = async (c, pid) => ((await c('GET', '/api/estoque/relatorio')).j.
   ok('permissão inexistente é ignorada', pr.s === 200 && !(await adm('GET', '/api/perfis')).j.perfis.find((p) => p.id === 'consulta').perms.includes('permissao.inventada'));
   await adm('PUT', '/api/perfis/consulta', { perms: require('./../lib/perms').PRESETS.consulta.perms });
 
+  /* ---------- 6b. arquivar e excluir usuários ---------- */
+  let ar = await adm('POST', '/api/usuarios', { usuario: 'u_arq', nome: 'Para arquivar', senha: 'senha-arq-12345', perfil: 'consulta' });
+  const arqId = ar.j.user.id;
+  const meId = (await adm('GET', '/api/me')).j.user.id;
+  ok('excluir usuário ativo é recusado', (await adm('DELETE', '/api/usuarios/' + arqId)).s === 400);
+  ok('não arquiva a própria conta', (await adm('PATCH', '/api/usuarios/' + meId, { arquivado: true })).s === 400);
+  ok('não exclui a própria conta', (await adm('DELETE', '/api/usuarios/' + meId)).s === 400);
+  { const cc = api(await login('u_consulta', 'senha-consulta-123')); const x1 = await cc('PATCH', '/api/usuarios/' + arqId, { arquivado: true }), x2 = await cc('DELETE', '/api/usuarios/' + arqId); ok('quem não gerencia usuários não arquiva nem exclui', x1.s === 403 && x2.s === 403, [x1, x2]); }
+  ar = await adm('PATCH', '/api/usuarios/' + arqId, { arquivado: true });
+  ok('arquivar desativa e marca arquivado', ar.s === 200 && ar.j.user.archived === true && ar.j.user.active === false, ar.j);
+  ok('usuário arquivado não consegue entrar', (await fetch(base + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ usuario: 'u_arq', senha: 'senha-arq-12345' }) })).status === 403);
+  ok('arquivado continua cadastrado na lista da API', (await adm('GET', '/api/usuarios')).j.users.some((u) => u.id === arqId && u.archived));
+  ar = await adm('PATCH', '/api/usuarios/' + arqId, { ativo: true });
+  ok('reativar tira do arquivo', ar.s === 200 && ar.j.user && ar.j.user.active === true && ar.j.user.archived === false, ar);
+  await adm('PATCH', '/api/usuarios/' + arqId, { arquivado: true });
+  ok('exclui usuário arquivado', (await adm('DELETE', '/api/usuarios/' + arqId)).s === 200 && !(await adm('GET', '/api/usuarios')).j.users.some((u) => u.id === arqId));
+  ok('excluir usuário inexistente dá 404', (await adm('DELETE', '/api/usuarios/' + arqId)).s === 404);
+  const adminsAntes = (await adm('GET', '/api/usuarios')).j.users.filter((u) => u.active).length;
+  ok('exclusão não mexeu nos demais usuários', adminsAntes >= 7, adminsAntes);
+
   /* ---------- 7. PROTEÇÃO DE ESTOQUE ---------- */
   // restaura as permissões individuais e as sessões usadas até aqui
   await adm('PATCH', '/api/usuarios/' + uCx.id, { negar: [] });

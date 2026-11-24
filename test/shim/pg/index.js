@@ -48,7 +48,7 @@ class Client {
           for (const l of lines.slice(1)) {
             const f = l.split(FS), o = {};
             cols.forEach((c, i) => { o[c] = f[i] === undefined ? '' : f[i]; });
-            ['is_called', 'active'].forEach((c) => { if (c in o) o[c] = o[c] === 't'; }); // o psql imprime booleanos como t/f
+            ['is_called', 'active', 'archived'].forEach((c) => { if (c in o) o[c] = o[c] === 't'; }); // o psql imprime booleanos como t/f
             ['perms', 'perm_grant', 'perm_deny', 'value', 'detail'].forEach((c) => { if (c in o && o[c] !== '' && o[c] !== null) { try { o[c] = JSON.parse(o[c]); } catch (e) { /* mantém texto */ } } });
             if ('system' in o) o.system = o.system === 't';
             if ('data' in o && o.data !== '') { try { o.data = JSON.parse(o.data); } catch (e) { /* mantém texto */ } }

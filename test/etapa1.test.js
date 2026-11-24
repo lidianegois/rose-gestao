@@ -17,9 +17,9 @@ const dados = async (s, id) => ((await s.list('loja')).find((d) => d.id === id) 
   /* ---------- 1. migrações ---------- */
   fresh('t_mig');
   let s = await open('t_mig');
-  ok('migrações aplicadas em banco vazio', PSQL('t_mig', "select count(*) from schema_migrations") === '3');
+  ok('migrações aplicadas em banco vazio', PSQL('t_mig', "select count(*) from schema_migrations") === '4');
   await s.close(); s = await open('t_mig');
-  ok('segunda inicialização não reaplica', PSQL('t_mig', "select count(*) from schema_migrations") === '3');
+  ok('segunda inicialização não reaplica', PSQL('t_mig', "select count(*) from schema_migrations") === '4');
   ok('coluna rev e contadores existem', PSQL('t_mig', "select count(*) from information_schema.columns where table_name='app_docs' and column_name='rev'") === '1' && PSQL('t_mig', 'select count(*) from app_counters') === '2');
   await s.close();
 

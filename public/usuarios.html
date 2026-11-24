@@ -49,7 +49,7 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
  <h1>Usuários e perfis</h1>
  <p class="lead">Quem pode entrar no sistema e o que cada um acessa. O perfil decide quais telas aparecem no menu lateral e o que a pessoa pode alterar.</p>
  <div class="grid">
-  <section class="card"><h2>Pessoas cadastradas</h2><div id="lista"><p class="lead">Carregando…</p></div></section>
+  <section class="card"><h2>Pessoas cadastradas</h2><p class="lead" id="arq-bar" style="margin:0 0 8px"></p><div id="lista"><p class="lead">Carregando…</p></div></section>
   <div>
    <form class="card" id="novo" novalidate style="margin-bottom:16px">
     <h2>Novo usuário</h2>
@@ -78,7 +78,7 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
  const $=s=>document.querySelector(s);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const dt=s=>s?new Date(s).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'nunca';
- let ME=null,LIST=[],OPEN='',PERFIS=[],CAT=[],LBL={};
+ let SHOWARQ=false,ME=null,LIST=[],OPEN='',PERFIS=[],CAT=[],LBL={};
  const TL={painel:['Painel','painel.ver'],caixa:['Caixa','caixa.ver'],vendas:['Vendas','vendas.ver'],clientes:['Clientes e fiado','clientes.ver'],produtos:['Produtos','produtos.ver'],movimentacoes:['Entradas e saídas','estoque.ver'],notas:['Notas fiscais','notas.ver'],compras:['Compras','compras.ver'],fornecedores:['Fornecedores','fornecedores.ver'],financeiro:['Financeiro','financeiro.ver'],analise:['Análise','analise.ver']};
  const EXTRA=[['Ver custo dos produtos','produtos.ver_custo'],['Ver margem e lucro','produtos.ver_margem'],['Aprovar operações (Etapa 4)','aprovacao.aprovar'],['Usuários e perfis','usuarios.gerir'],['Backup e apagar dados','backup.copiar']];
  const perfil=id=>PERFIS.find(p=>p.id===id);
@@ -93,10 +93,11 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
  const checkedOf=box=>new Set([...box.querySelectorAll('input[data-k]:checked')].map(i=>i.dataset.k));
  function render(){
   const opts=sel=>PERFIS.map(p=>`<option value="${esc(p.id)}"${p.id===sel?' selected':''}>${esc(p.label)}</option>`).join('');
-  $('#lista').innerHTML=LIST.map(u=>{const p=perfil(u.profile),base=new Set(p?p.perms:[]);const ef=new Set(base);(u.perm_grant||[]).forEach(k=>ef.add(k));(u.perm_deny||[]).forEach(k=>ef.delete(k));const pers=(u.perm_grant||[]).length+(u.perm_deny||[]).length;
+  const arqN=LIST.filter(u=>u.archived).length;$('#arq-bar').innerHTML=arqN?`<button type="button" class="btn sm" id="arq-toggle">${SHOWARQ?'Esconder':'Mostrar'} arquivados (${arqN})</button>`:'';
+  $('#lista').innerHTML=LIST.filter(u=>SHOWARQ||!u.archived).map(u=>{const p=perfil(u.profile),base=new Set(p?p.perms:[]);const ef=new Set(base);(u.perm_grant||[]).forEach(k=>ef.add(k));(u.perm_deny||[]).forEach(k=>ef.delete(k));const pers=(u.perm_grant||[]).length+(u.perm_deny||[]).length;
    return `<div class="user" data-id="${esc(u.id)}">
-   <div class="uh"><div><b>${esc(u.name)}</b><span class="bd ${esc(u.role)}">${esc(p?p.label:u.profile)}</span>${pers?'<span class="bd gerente">permissões personalizadas</span>':''}${u.active?'':'<span class="bd off">Desativado</span>'}<small>usuário: ${esc(u.username)} · último acesso: ${esc(dt(u.last_login))}</small></div></div>
-   <div class="acts"><label style="margin:0">Perfil <select class="rsel" data-a="perfil">${opts(u.profile)}</select></label><button type="button" class="btn sm" data-a="perm">Permissões</button><button type="button" class="btn sm" data-a="senha">Nova senha</button><button type="button" class="btn sm" data-a="nome">Mudar nome</button>${u.id===ME.id?'':`<button type="button" class="btn sm ${u.active?'dng':''}" data-a="ativo">${u.active?'Desativar':'Reativar'}</button>`}</div>
+   <div class="uh"><div><b>${esc(u.name)}</b><span class="bd ${esc(u.role)}">${esc(p?p.label:u.profile)}</span>${pers?'<span class="bd gerente">permissões personalizadas</span>':''}${u.archived?'<span class="bd off">Arquivado</span>':u.active?'':'<span class="bd off">Desativado</span>'}<small>usuário: ${esc(u.username)} · último acesso: ${esc(dt(u.last_login))}</small></div></div>
+   <div class="acts"><label style="margin:0">Perfil <select class="rsel" data-a="perfil">${opts(u.profile)}</select></label><button type="button" class="btn sm" data-a="perm">Permissões</button><button type="button" class="btn sm" data-a="senha">Nova senha</button><button type="button" class="btn sm" data-a="nome">Mudar nome</button>${u.id===ME.id?'':`<button type="button" class="btn sm ${u.active?'dng':''}" data-a="ativo">${u.active?'Desativar':'Reativar'}</button><button type="button" class="btn sm" data-a="arquivar">${u.archived?'Tirar do arquivo':'Arquivar'}</button>${u.active?'':'<button type="button" class="btn sm dng" data-a="excluir">Excluir</button>'}`}</div>
    ${OPEN===u.id+':perm'?`<div class="inline" style="display:block"><b>Permissões de ${esc(u.name)}</b><p class="lead" style="margin:4px 0">Parte do perfil “${esc(p?p.label:'')}”. O que você marcar ou desmarcar aqui vale só para esta pessoa.</p>${permBoxes('',ef,'u',false)}<div class="acts"><button type="button" class="btn pri sm" data-a="permsave">Salvar permissões</button><button type="button" class="btn sm" data-a="permreset">Voltar ao padrão do perfil</button><button type="button" class="btn sm" data-a="fechar">Fechar</button></div></div>`:''}
    ${OPEN===u.id+':senha'?`<form class="inline" data-f="senha"><label>Nova senha para ${esc(u.name)}<input name="v" type="text" minlength="8" autocomplete="new-password"></label><button class="btn pri sm">Salvar</button><button type="button" class="btn sm" data-a="fechar">Cancelar</button></form>`:''}
    ${OPEN===u.id+':nome'?`<form class="inline" data-f="nome"><label>Nome<input name="v" maxlength="60" value="${esc(u.name)}"></label><button class="btn pri sm">Salvar</button><button type="button" class="btn sm" data-a="fechar">Cancelar</button></form>`:''}
@@ -115,7 +116,10 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
   if(a==='senha'||a==='nome'||a==='perm'){OPEN=OPEN===id+':'+a?'':id+':'+a;return render()}
   if(a==='permreset')return upd(id,{conceder:[],negar:[]},box);
   if(a==='permsave'){const p=perfil(u.profile),base=new Set(p.perms),ck=checkedOf(box.querySelector('.inline'));return upd(id,{conceder:[...ck].filter(k=>!base.has(k)),negar:[...base].filter(k=>!ck.has(k))},box)}
-  if(a==='ativo')return upd(id,{ativo:!u.active},box)});
+  if(a==='ativo')return upd(id,{ativo:!u.active},box);
+  if(a==='arquivar')return upd(id,{arquivado:!u.archived},box);
+  if(a==='excluir'){if(!confirm('Excluir '+u.name+' ('+u.username+') de vez? Isso não pode ser desfeito. Se quiser só tirar da lista, use Arquivar.'))return;try{await api('DELETE','/api/usuarios/'+encodeURIComponent(id));LIST=LIST.filter(x=>x.id!==id);render()}catch(x){msg(box.querySelector('[data-msg]'),x.message)}}});
+ $('#arq-bar').addEventListener('click',ev=>{if(ev.target.closest('#arq-toggle')){SHOWARQ=!SHOWARQ;render()}});
  $('#lista').addEventListener('change',async ev=>{const sel=ev.target.closest('select[data-a=perfil]');if(!sel)return;const box=sel.closest('.user');upd(box.dataset.id,{perfil:sel.value,conceder:[],negar:[]},box)});
  $('#lista').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,box=f.closest('.user');upd(box.dataset.id,f.dataset.f==='senha'?{senha:f.v.value}:{nome:f.v.value},box)});
  $('#novo').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,m=$('#novo-msg');
