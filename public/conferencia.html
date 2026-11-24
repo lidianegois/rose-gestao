@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conferência de estoque · Rose</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>
+/* Mesma identidade do sistema. Mobile first: cartões empilhados; duas colunas a partir de 900px. */
+:root{color-scheme:light dark;--bg:light-dark(#fff,#160b0d);--ink:light-dark(#1d1416,#f4e9ea);--mut:light-dark(#6b5d60,#b39fa3);--line:light-dark(#efe4e5,#3a2226);--mist:light-dark(#fbf1f2,#241215);--card:light-dark(#fff,#1d0f12);--g:light-dark(#8e1230,#d9536f);--gd:light-dark(#1f7a4d,#62d39b);--okb:light-dark(#e8f5ee,#12291d);--red:light-dark(#c2410c,#ff9a6b);--gold:#e5a91a}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif}
+.top{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line);box-shadow:inset 0 3px 0 var(--gold)}
+.tb{display:flex;align-items:center;gap:10px;padding:12px 16px;max-width:1100px;margin:0 auto}
+.brand{margin-right:auto;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}.brand svg{width:34px;height:34px}
+.brand b{font:italic 700 24px/1 "Playfair Display",Georgia,serif;color:var(--g)}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 40px}
+h1{font:700 28px/1.15 "Playfair Display",Georgia,serif;margin:0 0 6px}h2{font:700 20px/1.2 "Playfair Display",Georgia,serif;margin:0 0 12px}
+.lead{color:var(--mut);margin:0 0 20px}
+.grid{display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin:0 0 12px}
+input,select{display:block;width:100%;margin-top:4px;font:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:46px;padding:8px 12px}
+.btn{font:inherit;font-weight:600;min-height:44px;padding:8px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.btn.pri{background:var(--g);border-color:var(--g);color:#fff}.btn.sm{min-height:38px;padding:6px 12px;font-size:14px}.btn.dng{color:var(--red)}
+input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid var(--g);outline-offset:2px}
+.user{border-bottom:1px solid var(--line);padding:14px 0}.user:last-child{border-bottom:0}
+.uh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.uh b{font-size:17px}.uh small{display:block;color:var(--mut);font-size:13px}
+.bd{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px;white-space:nowrap;margin-left:4px}
+.bd.admin{background:light-dark(#fbe7ea,#3a1218);color:var(--g)}.bd.gerente{background:light-dark(#fff3dc,#33240a);color:light-dark(#8a5a00,#f2b450)}.bd.caixa{background:light-dark(#eef1f4,#16241d);color:var(--mut)}
+.mx{width:100%;border-collapse:collapse;font-size:14px}.mx th,.mx td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}.mx th:first-child,.mx td:first-child{text-align:left}.mx th{font-size:12px;color:var(--mut);font-weight:600}.sim{color:var(--gd);font-weight:700}.nao{color:var(--mut)}
+.rsel{display:inline-block;width:auto;min-height:38px;margin:0;padding:4px 10px;font-size:14px}.bd.off{background:light-dark(#fdecea,#3a1712);color:var(--red)}
+.pm{display:grid;gap:4px;margin:8px 0}.pm h4{margin:10px 0 2px;font-size:13px;color:var(--mut)}.pm label{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--ink);margin:0;font-size:14px}.pm input{width:auto;min-height:0;margin:0}.pm .ch{color:var(--g);font-weight:700}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.inline{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;background:var(--mist);border-radius:12px;padding:10px}.inline label{flex:1 1 200px;margin:0}
+.msg{font-weight:600;min-height:22px;margin:8px 0 0}.msg.ok{color:var(--gd)}.msg.err{color:var(--red)}
+.note{background:var(--mist);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--mut)}
+@media(min-width:900px){.grid{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:start}h1{font-size:32px}}
+</style>
+<style>.tb2{width:100%;border-collapse:collapse;font-size:14px}.tb2 th,.tb2 td{padding:8px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.tb2 .n{text-align:right;white-space:nowrap}.tb2 th{font-size:12px;color:var(--mut);position:sticky;top:0;background:var(--card)}.sc{overflow:auto;max-height:60vh}.bad{color:var(--red);font-weight:600}.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--mist)}.kp{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:12px 0}.kp div{background:var(--mist);border-radius:12px;padding:12px}.kp b{display:block;font-size:22px}@media(min-width:900px){.grid{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<header class="top"><div class="tb">
+ <a class="brand" href="/" aria-label="Voltar ao sistema"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="var(--g)"/><circle cx="24" cy="24" r="19.5" fill="none" stroke="var(--gold)" stroke-width="1.5"/><path d="M12 15h3.5l3 13.5h13.5l2.8-9.5H17.2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 22.5h13M20.5 25.5h11" stroke="var(--gold)" stroke-width="1.6" stroke-linecap="round"/><circle cx="20.5" cy="33" r="2" fill="var(--gold)"/><circle cx="30" cy="33" r="2" fill="var(--gold)"/></svg><b>Rose</b></a>
+ <a class="btn sm" href="/">Voltar ao sistema</a>
+</div></header>
+<main class="wrap">
+ <h1>Conferência de estoque</h1>
+ <p class="lead">Mostra o saldo de cada produto e o que o sistema bloquearia quando a proteção estiver ligada. Nenhum custo ou margem aparece aqui.</p>
+ <div class="grid">
+  <section class="card"><h2>Situação da proteção</h2><div id="status"><p class="lead">Carregando…</p></div><div id="ctl"></div></section>
+  <section class="card"><div class="uh"><h2>Produtos</h2><div class="acts" style="margin:0"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="so" style="width:auto;min-height:0;margin:0"> só os que pedem atenção</label><button class="btn sm" id="csv" type="button">Baixar CSV</button></div></div><div class="sc"><table class="tb2"><thead><tr><th>Código</th><th>Produto</th><th class="n">Saldo</th><th class="n">Entradas</th><th class="n">Saídas</th><th class="n">Vendidos</th><th class="n">Mínimo</th><th class="n">Avisos</th><th>Situação</th></tr></thead><tbody id="linhas"></tbody></table></div></section>
+  <section class="card"><h2>Registro de avisos, bloqueios e exceções</h2><p class="lead">Somente inclusão: ninguém altera nem apaga este registro.</p><div class="sc"><table class="tb2"><thead><tr><th>Quando</th><th>Tipo</th><th>Produto</th><th class="n">Saldo</th><th class="n">Pedido</th><th>Quem pediu</th><th>Autorizou</th><th>Justificativa</th></tr></thead><tbody id="reg"></tbody></table></div></section>
+ </div>
+</main>
+<script>
+{
+ const $=s=>document.querySelector(s);
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const nf=v=>Number(v).toLocaleString('pt-BR',{maximumFractionDigits:3});
+ const dt=s=>s?new Date(s).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'—';
+ const MODO={off:'Desligada',aviso:'Só avisar (não bloqueia)',bloqueio:'Bloqueando'};
+ let R=null,ME=null;
+ async function api(method,url,body){const r=await fetch(url,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});if(r.status===401){location.replace('/login');throw new Error('Sessão encerrada.')}let j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.error||('Erro '+r.status));return j}
+ const atencao=l=>l.bloqueada||l.divergencias.length;
+ function render(){
+  const L=R.linhas,neg=L.filter(l=>l.saldo<0),zero=L.filter(l=>l.saldo===0),div=L.filter(l=>l.divergencias.length);
+  $('#status').innerHTML=`<p>Modo atual: <b>${esc(MODO[R.modo]||R.modo)}</b>${R.modo==='aviso'&&R.dias!==null?` · há <b>${R.dias}</b> dia(s) em aviso${R.dias>=7?' (os 7 dias de observação terminaram)':' (observação prevista: 7 dias)'}`:''}</p><div class="kp"><div><b>${neg.length}</b>com saldo negativo</div><div><b>${zero.length}</b>com saldo zero</div><div><b>${div.length}</b>com divergência</div><div><b>${R.registro.filter(x=>x.kind==='aviso').length}</b>avisos registrados</div></div>${R.produtosDesconhecidos.length?`<p class="bad">Há ${R.produtosDesconhecidos.length} código(s) de produto em vendas ou movimentos que não existem no cadastro.</p>`:''}`;
+  $('#ctl').innerHTML=ME.perm.includes('estoque.excecao')?`<hr style="border:0;border-top:1px solid var(--line)"><h3 style="margin:12px 0 6px">Mudar o modo</h3><p class="lead" style="margin-bottom:8px">Antes de ligar o bloqueio, confira e corrija os saldos acima (registre ajustes em “Entradas e saídas”). Com o bloqueio ligado, venda ou saída acima do saldo só passa com a autorização de um administrador.</p><div class="acts"><button class="btn sm" data-m="aviso">Só avisar</button><button class="btn sm" data-m="off">Desligar</button></div><label style="margin-top:10px;display:flex;gap:8px;align-items:center"><input type="checkbox" id="conf" style="width:auto;min-height:0;margin:0"> Conferi os saldos e quero ligar o bloqueio</label><button class="btn pri sm" data-m="bloqueio">Ligar o bloqueio</button><p class="msg" id="cm" role="status"></p>`:'';
+  rows();
+  $('#reg').innerHTML=R.registro.map(x=>`<tr><td>${esc(dt(x.at))}</td><td><span class="pill">${esc({aviso:'Aviso',bloqueio:'Bloqueado',excecao:'Exceção'}[x.kind]||x.kind)}</span></td><td>${esc(x.product_name||x.product_id)}</td><td class="n">${nf(x.saldo)}</td><td class="n">${nf(x.qty)}</td><td>${esc(x.user_name||'')}</td><td>${esc(x.authorized_by||'')}</td><td>${esc(x.justification||'')}</td></tr>`).join('')||'<tr><td colspan="8">Nada registrado ainda.</td></tr>';
+ }
+ function rows(){const so=$('#so').checked;$('#linhas').innerHTML=R.linhas.filter(l=>!so||atencao(l)).map(l=>`<tr><td>${esc(l.cod)}</td><td>${esc(l.nome)}</td><td class="n ${l.saldo<0?'bad':''}">${nf(l.saldo)}</td><td class="n">${nf(l.entradas)}</td><td class="n">${nf(l.saidas)}</td><td class="n">${nf(l.vendidos)}</td><td class="n">${nf(l.minimo)}</td><td class="n">${l.avisos||''}</td><td>${l.bloqueada?'<span class="pill">seria bloqueado (sem saldo)</span> ':''}${l.divergencias.map(d=>`<span class="bad">${esc(d)}</span>`).join('<br>')}</td></tr>`).join('')}
+ function csv(){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';const t=['Código;Produto;Saldo;Entradas;Saídas;Vendidos;Mínimo;Avisos;Situação'].concat(R.linhas.map(l=>[q(l.cod),q(l.nome),l.saldo,l.entradas,l.saidas,l.vendidos,l.minimo,l.avisos||0,q((l.bloqueada?'seria bloqueado; ':'')+l.divergencias.join('; '))].join(';'))).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));a.download='conferencia-estoque-'+new Date().toISOString().slice(0,10)+'.csv';a.click()}
+ async function load(){const [me,r]=await Promise.all([api('GET','/api/me'),api('GET','/api/estoque/relatorio')]);ME=me.user;R=r;render()}
+ $('#so').addEventListener('change',()=>R&&rows());$('#csv').addEventListener('click',()=>R&&csv());
+ document.addEventListener('click',async e=>{const b=e.target.closest('[data-m]');if(!b)return;const m=$('#cm'),modo=b.dataset.m;
+  if(modo==='bloqueio'&&!$('#conf').checked){m.textContent='Marque que conferiu os saldos.';m.className='msg err';return}
+  try{await api('POST','/api/estoque/modo',{modo,confirmo:modo==='bloqueio'?true:undefined});await load();const m2=$('#cm');m2.textContent='Modo alterado.';m2.className='msg ok'}catch(x){m.textContent=x.message;m.className='msg err'}});
+ load().catch(x=>{$('#status').innerHTML=`<p class="msg err">${esc(x.message)}</p>`});
+}
+</script>
+</body>
+</html>

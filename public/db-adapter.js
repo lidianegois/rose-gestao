@@ -32,7 +32,7 @@
       function (r) {
         if (r.status === 401) { location.replace('/login'); throw dbError('invalid_argument', 'Sessão encerrada. Entre de novo.'); }
         if (r.status === 403) throw dbError('invalid_argument', 'Sem permissão para gravar.');
-        if (r.status === 409) return r.json().then(function (j) { var e = dbError('conflict', (j && j.error) || 'Outra pessoa alterou os mesmos registros.'); e.conflicts = (j && j.conflicts) || []; throw e; });
+        if (r.status === 409) return r.json().then(function (j) { var est = j && j.code === 'estoque_insuficiente'; var e = dbError(est ? 'estoque' : 'conflict', (j && j.error) || 'Outra pessoa alterou os mesmos registros.'); e.conflicts = (j && j.conflicts) || []; e.itens = (j && j.itens) || []; throw e; });
         if (r.status === 413) throw dbError('invalid_argument', 'Documento grande demais.');
         if (r.status >= 500) throw dbError('unavailable', 'Servidor indisponível (HTTP ' + r.status + ').');
         if (!r.ok) throw dbError('invalid_argument', 'Pedido recusado (HTTP ' + r.status + ').');
@@ -149,7 +149,8 @@
         });
         if (!any) return Promise.resolve();
         writeSeq++;
-        return request('POST', baseUrl + '/_batch', { docs: docs, bulk: window.__bulk === true }).then(function (res) {
+        var exc = window.__excecao || undefined; window.__excecao = undefined;
+        return request('POST', baseUrl + '/_batch', { docs: docs, bulk: window.__bulk === true, excecao: exc }).then(function (res) {
           writeSeq++;
           var asg = res.assigned || {};
           Object.keys(docs).forEach(function (id) { // atualiza a base com o que foi gravado (inclui os números dados pelo servidor)
@@ -166,7 +167,7 @@
           soon();
         }, function (err) {
           writeSeq++;
-          if (err && err.code === 'conflict') {
+          if (err && (err.code === 'conflict' || err.code === 'estoque')) {
             // outra pessoa mexeu no mesmo registro: baixa o estado atual para a tela refazer a partir dele
             return request('GET', baseUrl).then(function (all) {
               absorb(all.docs); lastVersion = null;

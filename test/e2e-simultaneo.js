@@ -52,7 +52,7 @@ ok('as 3 vendas de B gravadas',dbv()-vv0===3);
 await A.pg.waitForTimeout(5000);
 ok('B vê o novo preço',await B.ev(()=>S.produtos[1].preco)===77.77);
 // ---- S3: mesmo lançamento baixado por A e B ao mesmo tempo
-const lid=await A.ev(()=>S.lancamentos.find(l=>l.tipo==='d'&&!l.pago).id);
+const lid=await A.ev(()=>S.lancamentos.find(l=>l.tipo==='r'&&!l.pago&&l.origem&&l.origem.startsWith('venda:')).id);
 await Promise.all([A.ev((id)=>{const l=S.lancamentos.find(x=>x.id===id);l.pago='2026-11-23';l.vpago=111;mark('lancamentos')},lid),B.ev((id)=>{const l=S.lancamentos.find(x=>x.id===id);l.pago='2026-11-23';l.vpago=222;mark('lancamentos')},lid)]);
 await A.pg.waitForTimeout(3500);await B.pg.waitForTimeout(3500);
 const vp=Number(PSQL(`select (l->>'vpago')::numeric from app_docs d, jsonb_array_elements(d.data->'items') l where d.id='lancamentos' and l->>'id'='${lid}'`));
@@ -68,7 +68,7 @@ const st=await B.pg.evaluate(async()=>{const get=await (await fetch('/api/col/lo
  const r4=await fetch('/api/col/loja/_batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({docs:{lancamentos:[{k:'items',op:'put',id:'lz',before:null,after:{id:'lz',valor:1}}]},bulk:true})});
  return [r1.status,r2.status,r3.status,r4.status]});
 ok('Caixa: não grava compras (403), não apaga via lote (403), não apaga via PUT antigo (403)',st[0]===403&&st[1]===403&&st[2]===403,st.join());
-ok('Caixa: gravar lançamento permitido (bulk ignorado para não-admin)',st[3]===200,st[3]);
+ok('Caixa: lançamento avulso sem origem agora é recusado (403); antes da Etapa 2 passava',st[3]===403,st[3]);
 // ---- S5: recarregar e continuar numeração
 const c1=cnt();await A.pg.reload();await A.pg.waitForTimeout(2500);await A.pg.goto(URL+'/#caixa');await A.pg.waitForTimeout(800);
 ok('após recarregar, tela = banco',await A.ev(()=>S.vendas.length)===dbv());

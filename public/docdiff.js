@@ -13,7 +13,7 @@
   'use strict';
 
   var LISTS = function (id) { return id === 'cadastros' ? ['clientes', 'produtos', 'fornecedores'] : ['items']; };
-  var SKIP = { seq: true }; // a numeração é do servidor
+  var SKIP = { seq: true, saldos: true }; // a numeração é do servidor
 
   function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
   function stable(v) {

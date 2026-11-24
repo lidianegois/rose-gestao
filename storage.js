@@ -11,6 +11,8 @@ const path = require('path');
 const crypto = require('crypto');
 const D = require('./public/docdiff.js');
 const B = require('./lib/batch.js');
+const P = require('./lib/perms.js');
+const STK = require('./lib/stock.js');
 
 function createStore() {
   return process.env.DATABASE_URL ? pgStore(process.env.DATABASE_URL) : fileStore(path.join(__dirname, 'data'));
@@ -29,6 +31,34 @@ function pgStore(url) {
     kind: 'PostgreSQL',
     async init() {
       await runMigrations(pool);
+      for (const [id, p] of Object.entries(P.PRESETS)) {
+        await pool.query('INSERT INTO app_roles (id, label, perms, system) VALUES ($1,$2,$3::jsonb,true) ON CONFLICT (id) DO NOTHING', [id, p.label, JSON.stringify(p.perms)]);
+      }
+    },
+    async roles() {
+      return (await pool.query('SELECT id, label, perms, system FROM app_roles ORDER BY system DESC, label')).rows;
+    },
+    async saveRole(r) {
+      await pool.query('INSERT INTO app_roles (id, label, perms, system) VALUES ($1,$2,$3::jsonb,$4) ON CONFLICT (id) DO UPDATE SET label=$2, perms=$3::jsonb, updated_at=now()', [r.id, r.label, JSON.stringify(r.perms), !!r.system]);
+    },
+    async settings() {
+      const o = {};
+      (await pool.query('SELECT key, value FROM app_settings')).rows.forEach((x) => { o[x.key] = x.value; });
+      return o;
+    },
+    async setSetting(k, v) {
+      await pool.query('INSERT INTO app_settings (key, value) VALUES ($1,$2::jsonb) ON CONFLICT (key) DO UPDATE SET value=$2::jsonb, updated_at=now()', [k, JSON.stringify(v)]);
+    },
+    async stockLog(entries) { await insertLog(pool, entries); },
+    async stockLogList(limit) {
+      return (await pool.query('SELECT id, at, kind, product_id, product_name, saldo, qty, user_name, authorized_by, justification FROM app_stock_log ORDER BY id DESC LIMIT $1', [limit || 500])).rows;
+    },
+    // todos os documentos da coleção que contam para o estoque, sem travar (para relatório)
+    async stockDocs(col) {
+      const r = await pool.query("SELECT id, data FROM app_docs WHERE col = $1 AND (id IN ('movimentos','compras','cadastros') OR id ~ '^(vendas|notas)-[0-9]{4}-[0-9]{2}$')", [col]);
+      const o = {};
+      r.rows.forEach((x) => { o[x.id] = x.data; });
+      return o;
     },
     async list(col) {
       const [r, c] = await Promise.all([
@@ -59,8 +89,26 @@ function pgStore(url) {
           const cr = await c.query("SELECT name, value FROM app_counters WHERE name IN ('venda', 'compra') ORDER BY name FOR UPDATE");
           cr.rows.forEach((x) => { counters[x.name] = Number(x.value); });
         }
-        const pl = B.plan(cur, counters, docsOps, opts);
+        let ops = docsOps, logs = [];
+        if (opts && opts.guard) {
+          ops = resolveOps(docsOps, cur);
+          const g = await opts.guard({
+            cur, ops,
+            lock: async (keys) => { for (const k of [...keys].sort()) await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['estoque:' + k]); },
+            read: async () => {
+              const r = await c.query("SELECT id, data FROM app_docs WHERE col = $1 AND (id IN ('movimentos','compras','cadastros') OR id ~ '^(vendas|notas)-[0-9]{4}-[0-9]{2}$')", [col]);
+              const o = {};
+              r.rows.forEach((x) => { o[x.id] = x.data; });
+              return o;
+            },
+          });
+          if (g && g.abort) { await c.query('ROLLBACK'); if (g.logsAbort && g.logsAbort.length) { try { await insertLog(c, g.logsAbort); } catch (e) { /* registro é auxiliar */ } } return { ok: false, abort: g.abort }; }
+          if (g && g.ops) ops = g.ops;
+          if (g && g.logs) logs = g.logs;
+        }
+        const pl = B.plan(cur, counters, ops, opts);
         if (pl.conflicts.length) { await c.query('ROLLBACK'); return { ok: false, conflicts: pl.conflicts }; }
+        if (logs.length) await insertLog(c, logs);
         for (const id of ids) {
           if (pl.updates[id]) {
             await c.query('UPDATE app_docs SET data = $3::jsonb, rev = rev + 1, updated_at = now() WHERE col = $1 AND id = $2', [col, id, JSON.stringify(pl.updates[id])]);
@@ -95,17 +143,18 @@ function pgStore(url) {
       return r.version || (await this.version());
     },
     async users() {
-      const r = await pool.query('SELECT id, username, name, pass, role, active, pwv, created_at, last_login FROM app_users ORDER BY created_at');
+      const r = await pool.query('SELECT id, username, name, pass, role, role_id, perm_grant, perm_deny, active, pwv, created_at, last_login FROM app_users ORDER BY created_at');
       return r.rows;
     },
     async createUser(u) {
-      await pool.query('INSERT INTO app_users (id, username, name, pass, role, active, pwv) VALUES ($1,$2,$3,$4,$5,$6,$7)', [u.id, u.username, u.name, u.pass, u.role, u.active, u.pwv]);
+      await pool.query('INSERT INTO app_users (id, username, name, pass, role, active, pwv, role_id, perm_grant, perm_deny) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb)', [u.id, u.username, u.name, u.pass, u.role, u.active, u.pwv, u.role_id || null, JSON.stringify(u.perm_grant || []), JSON.stringify(u.perm_deny || [])]);
     },
     async updateUser(id, f) {
-      const keys = Object.keys(f).filter((k) => ['name', 'pass', 'role', 'active', 'pwv', 'last_login'].includes(k));
+      const keys = Object.keys(f).filter((k) => ['name', 'pass', 'role', 'active', 'pwv', 'last_login', 'role_id', 'perm_grant', 'perm_deny'].includes(k));
       if (!keys.length) return;
-      const sets = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
-      await pool.query(`UPDATE app_users SET ${sets} WHERE id = $1`, [id, ...keys.map((k) => f[k])]);
+      const js = (k) => k === 'perm_grant' || k === 'perm_deny';
+      const sets = keys.map((k, i) => `${k} = $${i + 2}${js(k) ? '::jsonb' : ''}`).join(', ');
+      await pool.query(`UPDATE app_users SET ${sets} WHERE id = $1`, [id, ...keys.map((k) => (js(k) ? JSON.stringify(f[k] || []) : f[k]))]);
     },
     async remove(col, id) {
       await pool.query('DELETE FROM app_docs WHERE col = $1 AND id = $2', [col, id]);
@@ -147,13 +196,29 @@ function fileStore(dir) {
       return Object.keys(docs).sort().map((id) => ({ id, rev: (state.revs[col + '/' + id]) || 1, data: id === 'cadastros' ? withSeq(docs[id], state.counters) : docs[id] }));
     },
     applyBatch(col, docsOps, opts) {
-      return serial(() => {
+      return serial(async () => {
         const docs = (state.cols[col] = state.cols[col] || {});
         const ids = Object.keys(docsOps).sort();
         const cur = {};
         ids.forEach((id) => { cur[id] = docs[id] === undefined ? null : D.clone(docs[id]); });
-        const pl = B.plan(cur, state.counters, docsOps, opts);
+        let ops = docsOps, logs = [];
+        if (opts && opts.guard) {
+          ops = resolveOps(docsOps, cur);
+          const g = await opts.guard({
+            cur, ops, lock: async () => {},
+            read: async () => {
+              const o = {};
+              Object.keys(docs).filter((id) => STK.STOCK_DOC(id) || id === 'cadastros').forEach((id) => { o[id] = D.clone(docs[id]); });
+              return o;
+            },
+          });
+          if (g && g.abort) { if (g.logsAbort && g.logsAbort.length) { this.stockLogSync(g.logsAbort); } return { ok: false, abort: g.abort }; }
+          if (g && g.ops) ops = g.ops;
+          if (g && g.logs) logs = g.logs;
+        }
+        const pl = B.plan(cur, state.counters, ops, opts);
         if (pl.conflicts.length) return { ok: false, conflicts: pl.conflicts };
+        if (logs.length) this.stockLogSync(logs, true);
         for (const id of Object.keys(pl.updates)) {
           docs[id] = pl.updates[id];
           state.revs[col + '/' + id] = ((state.revs[col + '/' + id]) || 1) + 1;
@@ -167,6 +232,21 @@ function fileStore(dir) {
     },
     async version() {
       return String(state.rev);
+    },
+    async roles() {
+      return Object.entries(Object.assign({}, ...[Object.fromEntries(Object.entries(P.PRESETS).map(([id, p]) => [id, { id, label: p.label, perms: p.perms, system: true }]))], state.roles || {})).map(([, r]) => r);
+    },
+    saveRole(r) { return serial(() => { state.roles = state.roles || {}; state.roles[r.id] = { id: r.id, label: r.label, perms: r.perms, system: !!r.system }; save(); }); },
+    async settings() { return { estoque_modo: 'aviso', estoque_aviso_desde: (state.settings && state.settings.estoque_aviso_desde) || null, ...(state.settings || {}) }; },
+    setSetting(k, v) { return serial(() => { state.settings = state.settings || {}; state.settings[k] = v; save(); }); },
+    stockLogSync(entries, keep) { state.stockLog = state.stockLog || []; entries.forEach((e) => state.stockLog.push({ id: state.stockLog.length + 1, at: new Date().toISOString(), ...e })); if (!keep) save(); },
+    async stockLog(entries) { this.stockLogSync(entries); },
+    async stockLogList(limit) { return (state.stockLog || []).slice(-1 * (limit || 500)).reverse(); },
+    async stockDocs(col) {
+      const docs = state.cols[col] || {};
+      const o = {};
+      Object.keys(docs).filter((id) => STK.STOCK_DOC(id) || id === 'cadastros').forEach((id) => { o[id] = D.clone(docs[id]); });
+      return o;
     },
     async put(col, id, data) {
       const r = await this.applyBatch(col, { [id]: (cur) => D.diffDoc(id, cur, data) }, {});
@@ -203,6 +283,18 @@ function fileStore(dir) {
 }
 
 /* a numeração de vendas e compras pertence ao servidor: ela substitui a que estiver no documento */
+function resolveOps(docsOps, cur) {
+  const o = {};
+  for (const id of Object.keys(docsOps)) o[id] = D.clone(typeof docsOps[id] === 'function' ? docsOps[id](cur[id] || null) : docsOps[id]);
+  return o;
+}
+async function insertLog(q, entries) {
+  for (const e of entries) {
+    await q.query('INSERT INTO app_stock_log (kind, product_id, product_name, saldo, qty, user_id, user_name, authorized_by, justification, detail) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)',
+      [e.kind, e.product_id, e.product_name || null, e.saldo ?? null, e.qty ?? null, e.user_id || null, e.user_name || null, e.authorized_by || null, e.justification || null, JSON.stringify(e.detail || {})]);
+  }
+}
+
 function withSeq(data, ctr) {
   if (!ctr || (ctr.venda === undefined && ctr.compra === undefined)) return data;
   const seq = { ...((data && data.seq) || {}) };

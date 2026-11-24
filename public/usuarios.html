@@ -32,6 +32,7 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
 .bd.admin{background:light-dark(#fbe7ea,#3a1218);color:var(--g)}.bd.gerente{background:light-dark(#fff3dc,#33240a);color:light-dark(#8a5a00,#f2b450)}.bd.caixa{background:light-dark(#eef1f4,#16241d);color:var(--mut)}
 .mx{width:100%;border-collapse:collapse;font-size:14px}.mx th,.mx td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}.mx th:first-child,.mx td:first-child{text-align:left}.mx th{font-size:12px;color:var(--mut);font-weight:600}.sim{color:var(--gd);font-weight:700}.nao{color:var(--mut)}
 .rsel{display:inline-block;width:auto;min-height:38px;margin:0;padding:4px 10px;font-size:14px}.bd.off{background:light-dark(#fdecea,#3a1712);color:var(--red)}
+.pm{display:grid;gap:4px;margin:8px 0}.pm h4{margin:10px 0 2px;font-size:13px;color:var(--mut)}.pm label{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--ink);margin:0;font-size:14px}.pm input{width:auto;min-height:0;margin:0}.pm .ch{color:var(--g);font-weight:700}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .inline{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;background:var(--mist);border-radius:12px;padding:10px}.inline label{flex:1 1 200px;margin:0}
 .msg{font-weight:600;min-height:22px;margin:8px 0 0}.msg.ok{color:var(--gd)}.msg.err{color:var(--red)}
@@ -55,7 +56,7 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
     <label>Nome<input name="nome" maxlength="60" placeholder="Ex.: Camila Souza" required></label>
     <label>Usuário para entrar<input name="usuario" maxlength="30" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Ex.: camila" required></label>
     <label>Senha inicial (mínimo 8 caracteres)<input name="senha" type="text" minlength="8" autocomplete="new-password" required></label>
-    <label>Perfil<select name="papel"><option value="caixa">Caixa</option><option value="gerente">Gerente</option><option value="admin">Administradora</option></select></label>
+    <label>Perfil<select name="perfil" id="novo-perfil"></select></label>
     <button class="btn pri" style="width:100%">Criar usuário</button>
     <p class="msg" id="novo-msg" role="status"></p>
    </form>
@@ -67,6 +68,7 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
     <p class="msg" id="minha-msg" role="status"></p>
    </form>
    <section class="card" style="margin-top:16px"><h2>O que cada perfil acessa</h2><div id="matriz"><p class="lead">Carregando…</p></div></section>
+   <section class="card" style="margin-top:16px"><h2>Editar um perfil</h2><p class="lead" style="margin-bottom:10px">Mude o que um perfil pode fazer, ou crie um perfil novo a partir dele. Vale para todas as pessoas que usam o perfil. Quem estiver com a tela aberta entra de novo para valer.</p><label>Perfil<select id="pf-sel"></select></label><div id="pf-perms"></div><div class="acts"><button type="button" class="btn pri sm" id="pf-save">Salvar perfil</button><button type="button" class="btn sm" id="pf-new">Criar perfil novo a partir deste</button></div><p class="msg" id="pf-msg" role="status"></p></section>
    <p class="note" style="margin-top:16px">Para tirar o acesso de alguém, use <b>Desativar</b>: a pessoa sai do sistema na hora, e o histórico do que ela registrou continua guardado.</p>
   </div>
  </div>
@@ -76,36 +78,54 @@ input:focus-visible,select:focus-visible,.btn:focus-visible{outline:3px solid va
  const $=s=>document.querySelector(s);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const dt=s=>s?new Date(s).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'nunca';
- let ME=null,LIST=[],OPEN='',PERFIS=[],LBL={};
- const TL={painel:'Painel',caixa:'Caixa',vendas:'Vendas',clientes:'Clientes e fiado',produtos:'Produtos',movimentacoes:'Entradas e saídas',notas:'Notas fiscais',compras:'Compras',fornecedores:'Fornecedores',financeiro:'Financeiro',analise:'Análise'};
- function matriz(){const linhas=Object.keys(TL).map(k=>[TL[k],PERFIS.map(p=>p.tabs.includes(k))]).concat([['Usuários e perfis',PERFIS.map(p=>p.users)],['Backup e apagar dados',PERFIS.map(p=>p.data)]]);
-  document.getElementById('matriz').innerHTML=`<table class="mx"><thead><tr><th>Tela</th>${PERFIS.map(p=>`<th>${esc(p.label)}</th>`).join('')}</tr></thead><tbody>${linhas.map(([t,v])=>`<tr><td>${esc(t)}</td>${v.map(x=>x?'<td class="sim">Sim</td>':'<td class="nao">—</td>').join('')}</tr>`).join('')}</tbody></table><p class="lead" style="margin:10px 0 0;font-size:13px">O perfil Caixa também não pode excluir vendas nem clientes.</p>`}
- async function api(method,url,body){const r=await fetch(url,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});if(r.status===401){location.replace('/login');throw new Error('sessão')}const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Erro '+r.status);return j}
+ let ME=null,LIST=[],OPEN='',PERFIS=[],CAT=[],LBL={};
+ const TL={painel:['Painel','painel.ver'],caixa:['Caixa','caixa.ver'],vendas:['Vendas','vendas.ver'],clientes:['Clientes e fiado','clientes.ver'],produtos:['Produtos','produtos.ver'],movimentacoes:['Entradas e saídas','estoque.ver'],notas:['Notas fiscais','notas.ver'],compras:['Compras','compras.ver'],fornecedores:['Fornecedores','fornecedores.ver'],financeiro:['Financeiro','financeiro.ver'],analise:['Análise','analise.ver']};
+ const EXTRA=[['Ver custo dos produtos','produtos.ver_custo'],['Ver margem e lucro','produtos.ver_margem'],['Aprovar operações (Etapa 4)','aprovacao.aprovar'],['Usuários e perfis','usuarios.gerir'],['Backup e apagar dados','backup.copiar']];
+ const perfil=id=>PERFIS.find(p=>p.id===id);
+ async function api(method,url,body){const r=await fetch(url,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});if(r.status===401){location.replace('/login');throw new Error('Sessão encerrada.')}let j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.error||('Erro '+r.status));return j}
+ function matriz(){
+  const rows=Object.values(TL).concat(EXTRA);
+  $('#matriz').innerHTML=`<div class="scroll" style="overflow-x:auto"><table class="mx"><thead><tr><th>Permissão</th>${PERFIS.map(p=>`<th>${esc(p.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(([t,k])=>`<tr><td>${esc(t)}</td>${PERFIS.map(p=>`<td>${p.perms.includes(k)?'✓':'—'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+ }
+ function permBoxes(sel,checked,prefix,disabled){
+  return `<div class="pm">${CAT.map(([g,l])=>`<h4>${esc(g)}</h4>${l.map(([k,t])=>`<label><input type="checkbox" data-k="${k}" ${checked.has(k)?'checked':''} ${disabled?'disabled':''}>${esc(t)}</label>`).join('')}`).join('')}</div>`;
+ }
+ const checkedOf=box=>new Set([...box.querySelectorAll('input[data-k]:checked')].map(i=>i.dataset.k));
  function render(){
-  $('#lista').innerHTML=LIST.map(u=>`<div class="user" data-id="${esc(u.id)}">
-   <div class="uh"><div><b>${esc(u.name)}</b><span class="bd ${esc(u.role)}">${esc(LBL[u.role]||u.role)}</span>${u.active?'':'<span class="bd off">Desativado</span>'}<small>usuário: ${esc(u.username)} · último acesso: ${dt(u.last_login)}${u.id===ME.id?' · você':''}</small></div></div>
-   <div class="acts"><button type="button" class="btn sm" data-a="senha">Nova senha</button><button type="button" class="btn sm" data-a="nome">Mudar nome</button>${u.id===ME.id?'':`<label style="margin:0"><span class="sr" style="position:absolute;left:-9999px">Perfil de ${esc(u.name)}</span><select class="rsel" data-a="papel">${PERFIS.map(p=>`<option value="${esc(p.id)}"${p.id===u.role?' selected':''}>${esc(p.label)}</option>`).join('')}</select></label><button type="button" class="btn sm ${u.active?'dng':''}" data-a="ativo">${u.active?'Desativar':'Reativar'}</button>`}</div>
+  const opts=sel=>PERFIS.map(p=>`<option value="${esc(p.id)}"${p.id===sel?' selected':''}>${esc(p.label)}</option>`).join('');
+  $('#lista').innerHTML=LIST.map(u=>{const p=perfil(u.profile),base=new Set(p?p.perms:[]);const ef=new Set(base);(u.perm_grant||[]).forEach(k=>ef.add(k));(u.perm_deny||[]).forEach(k=>ef.delete(k));const pers=(u.perm_grant||[]).length+(u.perm_deny||[]).length;
+   return `<div class="user" data-id="${esc(u.id)}">
+   <div class="uh"><div><b>${esc(u.name)}</b><span class="bd ${esc(u.role)}">${esc(p?p.label:u.profile)}</span>${pers?'<span class="bd gerente">permissões personalizadas</span>':''}${u.active?'':'<span class="bd off">Desativado</span>'}<small>usuário: ${esc(u.username)} · último acesso: ${esc(dt(u.last_login))}</small></div></div>
+   <div class="acts"><label style="margin:0">Perfil <select class="rsel" data-a="perfil">${opts(u.profile)}</select></label><button type="button" class="btn sm" data-a="perm">Permissões</button><button type="button" class="btn sm" data-a="senha">Nova senha</button><button type="button" class="btn sm" data-a="nome">Mudar nome</button>${u.id===ME.id?'':`<button type="button" class="btn sm ${u.active?'dng':''}" data-a="ativo">${u.active?'Desativar':'Reativar'}</button>`}</div>
+   ${OPEN===u.id+':perm'?`<div class="inline" style="display:block"><b>Permissões de ${esc(u.name)}</b><p class="lead" style="margin:4px 0">Parte do perfil “${esc(p?p.label:'')}”. O que você marcar ou desmarcar aqui vale só para esta pessoa.</p>${permBoxes('',ef,'u',false)}<div class="acts"><button type="button" class="btn pri sm" data-a="permsave">Salvar permissões</button><button type="button" class="btn sm" data-a="permreset">Voltar ao padrão do perfil</button><button type="button" class="btn sm" data-a="fechar">Fechar</button></div></div>`:''}
    ${OPEN===u.id+':senha'?`<form class="inline" data-f="senha"><label>Nova senha para ${esc(u.name)}<input name="v" type="text" minlength="8" autocomplete="new-password"></label><button class="btn pri sm">Salvar</button><button type="button" class="btn sm" data-a="fechar">Cancelar</button></form>`:''}
    ${OPEN===u.id+':nome'?`<form class="inline" data-f="nome"><label>Nome<input name="v" maxlength="60" value="${esc(u.name)}"></label><button class="btn pri sm">Salvar</button><button type="button" class="btn sm" data-a="fechar">Cancelar</button></form>`:''}
-   <p class="msg" data-msg></p></div>`).join('');
+   <p class="msg" data-msg></p></div>`}).join('');
+  $('#novo-perfil').innerHTML=opts('caixa_vendas');
+  const cur=$('#pf-sel').value||'consulta';$('#pf-sel').innerHTML=opts(cur);pfShow();
+  matriz();
   const f=$('#lista form input');f&&f.focus();
  }
+ function pfShow(){const p=perfil($('#pf-sel').value);if(!p)return;$('#pf-perms').innerHTML=permBoxes('',new Set(p.perms),'p',p.id==='administrador');$('#pf-save').disabled=p.id==='administrador'}
  function msg(el,t,ok){el.textContent=t;el.className='msg '+(ok?'ok':'err')}
- async function load(){const [me,l,pf]=await Promise.all([api('GET','/api/me'),api('GET','/api/usuarios'),api('GET','/api/perfis')]);ME=me.user;LIST=l.users;PERFIS=pf.perfis;PERFIS.forEach(p=>LBL[p.id]=p.label);render();matriz()}
- $('#lista').addEventListener('click',async ev=>{const b=ev.target.closest('[data-a]');if(!b)return;const box=b.closest('.user'),id=box.dataset.id,u=LIST.find(x=>x.id===id),a=b.dataset.a,m=box.querySelector('[data-msg]');
+ async function load(){const [me,l,pf]=await Promise.all([api('GET','/api/me'),api('GET','/api/usuarios'),api('GET','/api/perfis')]);ME=me.user;LIST=l.users;PERFIS=pf.perfis;CAT=pf.catalogo;PERFIS.forEach(p=>LBL[p.id]=p.label);render()}
+ const upd=async(id,body,box)=>{const m=box.querySelector('[data-msg]');try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),body);LIST=LIST.map(x=>x.id===id?r.user:x);OPEN='';render();const m2=document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`);m2&&msg(m2,'Salvo. Se a pessoa estiver com o sistema aberto, ela precisa entrar de novo.',true)}catch(x){msg(m,x.message)}};
+ $('#lista').addEventListener('click',async ev=>{const b=ev.target.closest('[data-a]');if(!b||b.tagName==='SELECT')return;const box=b.closest('.user'),id=box.dataset.id,u=LIST.find(x=>x.id===id),a=b.dataset.a;
   if(a==='fechar'){OPEN='';return render()}
-  if(a==='senha'||a==='nome'){OPEN=id+':'+a;return render()}
-  if(a==='papel')return;
-  try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),{ativo:!u.active});LIST=LIST.map(x=>x.id===id?r.user:x);render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),a==='ativo'?(r.user.active?'Acesso liberado.':'Acesso bloqueado: a pessoa saiu do sistema.'):'Permissão alterada.',true)}catch(x){msg(m,x.message)}});
- $('#lista').addEventListener('change',async ev=>{const sel=ev.target.closest('select[data-a=papel]');if(!sel)return;const box=sel.closest('.user'),id=box.dataset.id,m=box.querySelector('[data-msg]');
-  try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),{papel:sel.value});LIST=LIST.map(x=>x.id===id?r.user:x);render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),'Perfil alterado para '+(LBL[r.user.role]||r.user.role)+'.',true)}catch(x){render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),x.message)}});
- $('#lista').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,box=f.closest('.user'),id=box.dataset.id,m=box.querySelector('[data-msg]'),v=f.v.value;
-  try{const r=await api('PATCH','/api/usuarios/'+encodeURIComponent(id),f.dataset.f==='senha'?{senha:v}:{nome:v});LIST=LIST.map(x=>x.id===id?r.user:x);OPEN='';render();msg(document.querySelector(`.user[data-id="${CSS.escape(id)}"] [data-msg]`),f.dataset.f==='senha'?'Senha trocada. Passe a nova senha para a pessoa.':'Nome alterado.',true)}catch(x){msg(m,x.message)}});
+  if(a==='senha'||a==='nome'||a==='perm'){OPEN=OPEN===id+':'+a?'':id+':'+a;return render()}
+  if(a==='permreset')return upd(id,{conceder:[],negar:[]},box);
+  if(a==='permsave'){const p=perfil(u.profile),base=new Set(p.perms),ck=checkedOf(box.querySelector('.inline'));return upd(id,{conceder:[...ck].filter(k=>!base.has(k)),negar:[...base].filter(k=>!ck.has(k))},box)}
+  if(a==='ativo')return upd(id,{ativo:!u.active},box)});
+ $('#lista').addEventListener('change',async ev=>{const sel=ev.target.closest('select[data-a=perfil]');if(!sel)return;const box=sel.closest('.user');upd(box.dataset.id,{perfil:sel.value,conceder:[],negar:[]},box)});
+ $('#lista').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,box=f.closest('.user');upd(box.dataset.id,f.dataset.f==='senha'?{senha:f.v.value}:{nome:f.v.value},box)});
  $('#novo').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,m=$('#novo-msg');
-  try{const r=await api('POST','/api/usuarios',{nome:f.nome.value,usuario:f.usuario.value,senha:f.senha.value,papel:f.papel.value});LIST.push(r.user);render();msg(m,`Usuário “${r.user.username}” criado. Passe o usuário e a senha para ${r.user.name}.`,true);f.reset()}catch(x){msg(m,x.message)}});
+  try{const r=await api('POST','/api/usuarios',{nome:f.nome.value,usuario:f.usuario.value,senha:f.senha.value,perfil:f.perfil.value});LIST.push(r.user);render();msg(m,`Usuário “${r.user.username}” criado. Passe a senha para a pessoa e peça para trocar no primeiro acesso.`,true);f.reset()}catch(x){msg(m,x.message)}});
  $('#novo').usuario.addEventListener('input',e=>{e.target.value=e.target.value.toLowerCase().replace(/\s+/g,'')});
  $('#minha').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target,m=$('#minha-msg');
   try{await api('POST','/api/senha',{atual:f.atual.value,nova:f.nova.value});msg(m,'Sua senha foi trocada.',true);f.reset()}catch(x){msg(m,x.message)}});
+ $('#pf-sel').addEventListener('change',pfShow);
+ $('#pf-save').addEventListener('click',async()=>{const m=$('#pf-msg');try{await api('PUT','/api/perfis/'+encodeURIComponent($('#pf-sel').value),{perms:[...checkedOf($('#pf-perms'))]});await load();msg(m,'Perfil salvo. As pessoas desse perfil precisam entrar de novo para valer.',true)}catch(x){msg(m,x.message)}});
+ $('#pf-new').addEventListener('click',async()=>{const m=$('#pf-msg'),nome=prompt('Nome do novo perfil:');if(!nome)return;try{await api('POST','/api/perfis',{nome,perms:[...checkedOf($('#pf-perms'))]});await load();msg(m,'Perfil criado.',true)}catch(x){msg(m,x.message)}});
  load().catch(x=>{$('#lista').innerHTML=`<p class="msg err">${esc(x.message)}</p>`});
 }
 </script>
