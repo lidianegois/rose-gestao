@@ -2,7 +2,7 @@
 /*
  * Cria o perfil interno TI-Lidiane e a conta individual de teste. Uso só em ambiente de teste (plano completo).
  * A senha vem da variável TI_SENHA (nunca é impressa). Não rode na produção da Rose.
- * Uso: DATABASE_URL=... TI_SENHA='...' [TI_USUARIO=ti-lidiane] node scripts/criar-ti-lidiane.js
+ * Uso: DATABASE_URL=... TI_SENHA='...' PILOTO_BANCO=<nome do banco de teste> [TI_USUARIO=ti-lidiane] node scripts/criar-ti-lidiane.js
  */
 const crypto = require('crypto');
 const PL = require('../lib/plans.js');

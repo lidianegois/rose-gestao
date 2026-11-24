@@ -145,7 +145,7 @@ const profileOf = (u) => u.role_id || P.LEGACY[u.role] || 'caixa_atual';
 let planoCache = null, planoAt = 0;
 async function planoAtual() {
   if (process.env.PLANO_ENFORCE === 'off') return 'completo';
-  if (!planoCache || Date.now() - planoAt > 5000) { const st = await store.settings(); planoCache = { plano: PL.nome(st.plano), empresa: st.empresa_nome || 'Rose Mercearia e Bazar' }; planoAt = Date.now(); }
+  if (!planoCache || Date.now() - planoAt > 5000) { const st = await store.settings(); planoCache = { plano: PL.PLANOS[process.env.PLANO_PILOTO] ? process.env.PLANO_PILOTO : PL.nome(st.plano), empresa: st.empresa_nome || 'Rose Mercearia e Bazar' }; planoAt = Date.now(); }
   return planoCache.plano;
 }
 async function empresaNome() { await planoAtual(); return (planoCache && planoCache.empresa) || 'Rose Mercearia e Bazar'; }
@@ -712,9 +712,25 @@ async function bootstrapAdmin() {
   console.log(`Primeira administradora criada: ${username}`);
 }
 
+/* Piloto (serviço de teste): com TI_SENHA e plano completo, cria a conta individual TI-Lidiane uma única vez.
+ * A senha só é usada nessa criação (quem já existe não é alterado) e nunca é impressa. */
+async function bootstrapTi() {
+  const senha = process.env.TI_SENHA;
+  if (!senha) return;
+  if ((await planoAtual()) !== 'completo') { console.warn('TI_SENHA ignorada: a conta TI-Lidiane só é criada no plano completo.'); return; }
+  if (senha.length < 8) { console.warn('TI_SENHA ignorada: use pelo menos 8 caracteres.'); return; }
+  const username = String(process.env.TI_USUARIO || 'ti-lidiane').trim().toLowerCase();
+  if ((await users(true)).some((u) => u.username === username)) return;
+  await store.saveRole(PL.TI_LIDIANE);
+  await store.createUser({ id: 'u' + crypto.randomBytes(6).toString('hex'), username, name: 'TI-Lidiane', pass: await hashPassword(senha), role: P.LEGACY_ROLE('ti_lidiane'), role_id: 'ti_lidiane', perm_grant: [], perm_deny: [], active: true, pwv: 1 });
+  await users(true);
+  console.log(`Conta ${username} criada.`);
+}
+
 store
   .init()
   .then(bootstrapAdmin)
+  .then(bootstrapTi)
   .then(() => {
     server.listen(PORT, () => console.log(`Rose Gestão rodando na porta ${PORT} · armazenamento: ${store.kind} · login por usuário`));
   })

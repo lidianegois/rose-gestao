@@ -380,6 +380,12 @@ async function runMigrations(pool) {
   const files = fs.readdirSync(dir).filter((f) => /^\d+_.+\.sql$/.test(f)).sort();
   const c = await pool.connect();
   try {
+    /* Modo piloto: só mexe no banco de teste esperado; se não der para confirmar, a inicialização para antes de qualquer alteração. */
+    if (process.env.PLANO_PILOTO || process.env.TI_SENHA) {
+      const esperado = process.env.PILOTO_BANCO || 'rose_gestao_teste_db';
+      const atual = ((await c.query('SELECT current_database() AS db')).rows[0] || {}).db;
+      if (atual !== esperado) throw new Error('Modo piloto: o banco conectado não é o banco de teste esperado. Nada foi alterado.');
+    }
     await c.query('SELECT pg_advisory_lock(727274)');
     await c.query('CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, name text NOT NULL, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
     const done = new Map((await c.query('SELECT version, checksum FROM schema_migrations')).rows.map((r) => [r.version, r.checksum]));

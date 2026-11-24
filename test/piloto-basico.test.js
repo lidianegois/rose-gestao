@@ -130,10 +130,10 @@ const FORA = ['financeiro.dre', 'analise.ver', 'financeiro.solicitar_pagamento',
   await batch(adm, { cadastros: [put('produtos', { id: 'q1', cod: 'TC1', nome: 'TC Arroz 5 kg', custo: 22, preco: 29.9, min: 5, ean: '7892000100100' })] }, { bulk: true });
   await stop();
   setPlano('t_pcom', 'completo');
-  const sc = spawnSync('node', ['scripts/criar-ti-lidiane.js'], { env: { ...process.env, DATABASE_URL: `postgres://postgres@localhost:${PT}/t_pcom`, TI_SENHA: 'senha-ti-lidiane-1', NODE_PATH: 'test/shim' }, encoding: 'utf8' });
+  const sc = spawnSync('node', ['scripts/criar-ti-lidiane.js'], { env: { ...process.env, DATABASE_URL: `postgres://postgres@localhost:${PT}/t_pcom`, TI_SENHA: 'senha-ti-lidiane-1', PILOTO_BANCO: 't_pcom', NODE_PATH: 'test/shim' }, encoding: 'utf8' });
   ok('script cria o perfil e a conta TI-Lidiane no banco de teste (plano completo)', sc.status === 0 && /prontos/.test(sc.stdout), sc.stdout + sc.stderr);
   ok('o script não imprime a senha', !(sc.stdout + sc.stderr).includes('senha-ti-lidiane-1'));
-  const sc2 = spawnSync('node', ['scripts/criar-ti-lidiane.js'], { env: { ...process.env, DATABASE_URL: `postgres://postgres@localhost:${PT}/t_pbas`, TI_SENHA: 'senha-ti-lidiane-1', NODE_PATH: 'test/shim' }, encoding: 'utf8' });
+  const sc2 = spawnSync('node', ['scripts/criar-ti-lidiane.js'], { env: { ...process.env, DATABASE_URL: `postgres://postgres@localhost:${PT}/t_pbas`, TI_SENHA: 'senha-ti-lidiane-1', PILOTO_BANCO: 't_pbas', NODE_PATH: 'test/shim' }, encoding: 'utf8' });
   ok('o script recusa criar a conta em banco com plano Básico', sc2.status === 2 && PSQL('t_pbas', "select count(*) from app_users where username='ti-lidiane'") === '0', sc2.stderr);
   await start('t_pcom', { APP_USER: 'empresa', APP_PASSWORD: 'senha-empresa-1' }, 3404);
   const ADM = api(await login('empresa', 'senha-empresa-1'));

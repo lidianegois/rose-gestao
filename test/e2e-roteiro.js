@@ -40,7 +40,7 @@ const USER = CEN === 'basico' ? ADM : ['ti-lidiane', 'senha-ti-lidiane-1'];
   await start(); await stop();
   PSQL(`insert into app_settings(key,value) values ('plano','"${CEN}"'),('empresa_nome','"${CEN === 'basico' ? 'Rose Mercearia e Bazar' : 'Mercado Modelo (teste)'}"') on conflict (key) do update set value=excluded.value`);
   if (CEN === 'completo') {
-    const sc = spawnSync('node', ['scripts/criar-ti-lidiane.js'], { cwd: DIR, env: { ...process.env, DATABASE_URL: `postgres://postgres@localhost:${PT}/${DB}`, TI_SENHA: USER[1], NODE_PATH: path.join(__dirname, 'shim') }, encoding: 'utf8' });
+    const sc = spawnSync('node', ['scripts/criar-ti-lidiane.js'], { cwd: DIR, env: { ...process.env, DATABASE_URL: `postgres://postgres@localhost:${PT}/${DB}`, TI_SENHA: USER[1], PILOTO_BANCO: DB, NODE_PATH: path.join(__dirname, 'shim') }, encoding: 'utf8' });
     ok('conta TI-Lidiane criada no cenário Completo', sc.status === 0, sc.stderr);
   }
   await start();

@@ -35,3 +35,5 @@ node test/e2e-roteiro.js completo        # navegador: mesmo roteiro, TI-Lidiane 
 
 Só dados fictícios; cada cenário cria o próprio banco e uma cópia do site em `/tmp/rot_<cenario>` com o gancho de teste.
 O `e2e-perfis.js` espera um banco já com mais de 5 produtos (rode depois do `e2e-simultaneo.js` num banco novo).
+
+Serviço de piloto (`PLANO_PILOTO`, `TI_SENHA`): `node test/piloto-env.test.js` (banco local `rose_gestao_teste_db`).
