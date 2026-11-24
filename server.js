@@ -211,23 +211,77 @@ function failed(ip) {
   else a.n++;
 }
 
+/* Camada 2: contador POR USUÁRIO, que não depende de IP nem de cabeçalho nenhum (nada que o cliente controle).
+ * Os primeiros erros não esperam nada; passando do limite, cada novo erro dobra a espera (30 s, 1 min, 2 min... até 15 min).
+ * Não trava definitivamente e não afeta os outros usuários. Quem já entrou antes naquele aparelho (cookie de dispositivo
+ * assinado, preso ao usuário e à versão da senha) não espera, com um limite próprio bem mais alto. Nomes que não existem
+ * contam igual, para não revelar quem está cadastrado. */
+const WINDOW = 15 * 60000;
+const ACCT_RESET = 2 * 3600000; // a conta só "esquece" os erros depois de 2 h sem novas tentativas (a espera máxima é 15 min)
+const acct = new Map();
+const ACCT_FREE = 20, ACCT_FREE_DEVICE = 60;
+function acctWait(key) {
+  const a = acct.get(key);
+  if (!a) return 0;
+  if (Date.now() - a.t > ACCT_RESET) { acct.delete(key); return 0; }
+  return Math.max(0, a.until - Date.now());
+}
+function acctFail(key, free) {
+  const now = Date.now();
+  let a = acct.get(key);
+  if (!a || now - a.t > ACCT_RESET) a = { n: 0, t: now, until: 0 };
+  a.n++; a.t = now;
+  if (a.n > free) a.until = now + Math.min(30000 * 2 ** Math.min(a.n - free - 1, 20), WINDOW);
+  acct.delete(key); acct.set(key, a); // reinsere: o mais antigo fica no começo
+  if (acct.size > 5000) acct.delete(acct.keys().next().value); // limite de memória contra nomes aleatórios
+}
+const tooManyMsg = (ms) => `Muitas tentativas para este usuário. Tente de novo em ${Math.ceil(ms / 60000) > 1 ? Math.ceil(ms / 60000) + ' minutos' : Math.max(1, Math.ceil(ms / 1000)) + ' segundos'}.`;
+
+const DEVICE_COOKIE = 'rose_disp', DEVICE_DAYS = 90;
+const deviceSign = (payload) => sign('disp:' + payload); // separado da assinatura da sessão
+function makeDeviceCookie(u, req) {
+  const payload = Buffer.from(JSON.stringify({ id: u.id, v: u.pwv, e: Date.now() + DEVICE_DAYS * 864e5 })).toString('base64url');
+  const secure = req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production' || process.env.RENDER === 'true' ? '; Secure' : '';
+  return `${DEVICE_COOKIE}=${payload}.${deviceSign(payload)}; Path=/api/login; HttpOnly; SameSite=Lax; Max-Age=${DEVICE_DAYS * 86400}${secure}`;
+}
+function knownDevice(req, u) {
+  if (!u) return false;
+  const raw = (req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith(DEVICE_COOKIE + '='));
+  if (!raw) return false;
+  const [payload, sig] = raw.slice(DEVICE_COOKIE.length + 1).split('.');
+  if (!payload || !sig) return false;
+  const good = deviceSign(payload);
+  if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) return false;
+  try {
+    const d = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return d && d.id === u.id && d.v === u.pwv && d.e > Date.now();
+  } catch (e) { return false; }
+}
+
 /* ---------- conta ---------- */
 async function handleLogin(req, res) {
-  const ip = clientIp(req);
-  if (tooMany(ip)) return send(res, 429, { error: 'Muitas tentativas. Espere 15 minutos e tente de novo.' });
   const body = await readJson(req, 10000);
-  const username = String(body.usuario || '').trim().toLowerCase();
+  const username = String(body.usuario || '').trim().toLowerCase().slice(0, 60);
   const pass = String(body.senha || '');
+  const ip = clientIp(req) + '|' + username; // camada 1: por endereço E usuário, então quem divide a rede da loja não bloqueia os colegas
+  if (tooMany(ip)) return send(res, 429, { error: 'Muitas tentativas. Espere 15 minutos e tente de novo.' });
   const u = (await users(true)).find((x) => x.username === username);
+  const device = knownDevice(req, u);
+  const key = (device ? 'd:' : 'u:') + username; // camada 2
+  const wait = acctWait(key);
+  if (wait > 0) return send(res, 429, { error: tooManyMsg(wait) }, { 'Retry-After': String(Math.ceil(wait / 1000)) });
   const ok = await checkPassword(pass, u ? u.pass : DUMMY_HASH);
   if (!u || !ok) {
     failed(ip);
+    acctFail(key, device ? ACCT_FREE_DEVICE : ACCT_FREE);
     return send(res, 401, { error: 'Usuário ou senha incorretos.' });
   }
   if (!u.active) return send(res, 403, { error: 'Este usuário está desativado. Fale com a administradora.' });
   attempts.delete(ip);
+  acct.delete('d:' + username);
+  if (!device) acct.delete('u:' + username); // aparelho conhecido não zera a espera imposta a quem chuta senhas de fora
   store.updateUser(u.id, { last_login: new Date().toISOString() }).catch(() => {});
-  return send(res, 200, { ok: true, user: publicUser(u) }, { 'Set-Cookie': makeCookie(u, req) });
+  return send(res, 200, { ok: true, user: publicUser(u) }, { 'Set-Cookie': [makeCookie(u, req), makeDeviceCookie(u, req)] });
 }
 
 async function handleOwnPassword(req, res, me) {
@@ -411,14 +465,15 @@ async function handleEstoque(req, res, parts, me) {
     return send(res, 200, { modo, itens });
   }
   if (sub === 'autorizar' && req.method === 'POST') {
-    const ip = clientIp(req);
-    if (tooMany(ip)) return send(res, 429, { error: 'Muitas tentativas. Espere 15 minutos e tente de novo.' });
+    const ip = clientIp(req) + '|exc';
+    const who = 'exc:' + me.id; // quem pede já está autenticado: o limite por pessoa não depende de IP nem de cabeçalhos
+    if (tooMany(ip) || tooMany(who)) return send(res, 429, { error: 'Muitas tentativas. Espere 15 minutos e tente de novo.' });
     const b = await readJson(req, 5000);
     const just = String(b.justificativa || '').trim();
     if (just.length < 5) return send(res, 400, { error: 'Escreva a justificativa (pelo menos 5 caracteres).' });
     const a = (await users(true)).find((x) => x.username === String(b.usuario || '').trim().toLowerCase());
     const ok = await checkPassword(String(b.senha || ''), a ? a.pass : DUMMY_HASH);
-    if (!a || !ok || !a.active || !(await access(a)).set.has('estoque.excecao')) { failed(ip); return send(res, 403, { error: 'Usuário ou senha de administrador incorretos.' }); }
+    if (!a || !ok || !a.active || !(await access(a)).set.has('estoque.excecao')) { failed(ip); failed(who); return send(res, 403, { error: 'Usuário ou senha de administrador incorretos.' }); }
     return send(res, 200, { token: makeExcecaoToken(a, me, just), por: a.name });
   }
   return send(res, 404, { error: 'não encontrado' });

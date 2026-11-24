@@ -60,6 +60,29 @@ const falhas = async (base, n, h) => { const r = []; for (let i = 0; i < n; i++)
   ok('True-Client-IP também vale como origem e XFF é ignorado', r.slice(10).every((s) => s === 429), r);
   await new Promise((rs) => { proc.kill(); setTimeout(rs, 300); });
 
+
+  /* ---------- casos de borda do cabeçalho (revisão final) ---------- */
+  ({ proc, base } = await start(code, 3308, { RENDER: 'true' }));
+  // valores que NÃO são um único IP válido são ignorados: o cliente cai no endereço da conexão e o limite vale
+  const invalidos = ['1.1.1.1, 2.2.2.2', '1.1.1.1:8080', '999.1.1.1', 'a'.repeat(5000), ' ', '1.1.1.1;x'];
+  r = await falhas(base, 12, (i) => ({ 'cf-connecting-ip': invalidos[i % invalidos.length] }));
+  ok('lista de IPs, IP com porta, IP inválido, valor enorme ou vazio no CF-Connecting-IP são ignorados e o limite vale', r.slice(10).every((x) => x === 429), r);
+  // sem nenhum cabeçalho de IP, todos compartilham o endereço da conexão (atrás do balanceador seria o mesmo para todos)
+  ok('SEM cabeçalho de IP, outra pessoa sem cabeçalho também fica bloqueada (limitação conhecida: contador compartilhado)', (await login(base, {}, 'senha12345')).status === 429);
+  ok('...mas quem chega COM CF-Connecting-IP válido não sofre esse bloqueio compartilhado', (await login(base, { 'cf-connecting-ip': '203.0.113.90' }, 'senha12345')).status === 200);
+  await new Promise((rs) => { proc.kill(); setTimeout(rs, 300); });
+
+  ({ proc, base } = await start(code, 3309, { RENDER: 'true' }));
+  // IPv6 e maiúsculas/minúsculas contam como o mesmo endereço; espaços ao redor são aparados
+  r = await falhas(base, 12, (i) => ({ 'cf-connecting-ip': i % 2 ? ' 2001:DB8::1 ' : '2001:db8::1' }));
+  ok('IPv6 (maiúsculas/minúsculas, espaços) é normalizado e conta como um só cliente', r.slice(10).every((x) => x === 429) && r.slice(0, 10).every((x) => x === 401), r);
+  // se os dois cabeçalhos existem e divergem, vale o CF-Connecting-IP (o True-Client-IP não permite fugir do limite)
+  r = await falhas(base, 12, (i) => ({ 'cf-connecting-ip': '203.0.113.100', 'true-client-ip': '10.0.0.' + i }));
+  ok('com os dois cabeçalhos, vale o CF-Connecting-IP; variar o True-Client-IP não contorna', r.slice(10).every((x) => x === 429), r);
+  // o bloqueio dura enquanto a janela de 15 minutos estiver aberta e é por IP: uma pessoa não bloqueia outra
+  ok('bloqueio de um IP não afeta quem usa outro IP, mesmo com o mesmo usuário', (await login(base, { 'cf-connecting-ip': '203.0.113.101' }, 'senha12345')).status === 200);
+  await new Promise((rs) => { proc.kill(); setTimeout(rs, 300); });
+
   /* ---------- fora do Render (teste local / acesso direto): cabeçalhos não são confiáveis ---------- */
   ({ proc, base } = await start(code, 3304, { RENDER: '' }));
   r = await falhas(base, 12, (i) => ({ 'cf-connecting-ip': `203.0.113.${i + 1}`, 'x-forwarded-for': `8.8.8.${i}` }));
