@@ -70,7 +70,7 @@ const OK_DB = 'rose_gestao_teste_db';
   const NMIG = String(require('fs').readdirSync('db/migrations').filter((f) => /^\d+_.+\.sql$/.test(f)).length);
   ok('todas as migrações (incluindo a 004) aplicadas só no banco de teste', PSQL(OK_DB, 'select count(*) from schema_migrations') === NMIG && PSQL(OK_DB, "select count(*) from schema_migrations where version='004'") === '1', NMIG);
   let ck = await login(3421, 'rose', SEG.rose); let m = ck && (await me(3421, ck));
-  ok('Rose entra no Básico e /api/me mostra plano basico', m && m.plano === 'basico' && !m.perm.includes('financeiro.dre'), m && m.plano);
+  ok('Rose entra no Básico e /api/me mostra plano basico', m && m.plano === 'basico' && m.perm.includes('financeiro.dre'), m && m.plano);
   ok('TI_SENHA ignorada no Básico: conta TI-Lidiane não existe', PSQL(OK_DB, "select count(*) from app_users where username='ti-lidiane'") === '0' && (await login(3421, 'ti-lidiane', SEG.ti)) === null);
   await stop(p);
 
@@ -101,7 +101,7 @@ const OK_DB = 'rose_gestao_teste_db';
   const ck5 = await login(3425, 'ti-lidiane', SEG.ti); const m5 = ck5 && (await me(3425, ck5));
   ok('no Básico a TI-Lidiane fica sem permissões', m5 && m5.plano === 'basico' && m5.perm.length === 0, m5 && m5.perm.length);
   const ck6 = await login(3425, 'rose', SEG.rose); const m6 = await me(3425, ck6);
-  ok('PLANO_PILOTO prevalece sobre o plano gravado no banco (Rose segue no Básico)', m6.plano === 'basico' && !m6.perm.includes('financeiro.dre') && !m6.perm.includes('analise.ver'));
+  ok('PLANO_PILOTO prevalece sobre o plano gravado no banco (Rose segue no Básico)', m6.plano === 'basico' && m6.perm.includes('financeiro.dre') && !m6.perm.includes('analise.ver'));
   ok('valor inválido em PLANO_PILOTO é ignorado (usa o plano do banco)', await (async () => { await stop(p); p = run(OK_DB, { PLANO_PILOTO: 'xyz' }, 3426); if (!(await up(p, 3426))) return false; const c = await login(3426, 'rose', SEG.rose); return (await me(3426, c)).plano === 'completo'; })());
   await stop(p);
   console.log(`\n${passed} passaram, ${failed} falharam`); process.exit(failed ? 1 : 0);

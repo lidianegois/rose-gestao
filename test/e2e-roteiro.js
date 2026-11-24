@@ -260,7 +260,7 @@ const USER = CEN === 'basico' ? ADM : ['ti-lidiane', 'senha-ti-lidiane-1'];
   const fintxt = await pg.locator('#app, main, body').first().innerText();
   const temDre = /Resultado\s*·/.test(fintxt), temLucro = /Lucro líquido ·/.test(fintxt);
   const temAP = /A pagar em aberto/.test(fintxt), temCx = /Saldo em caixa hoje/.test(fintxt);
-  if (CEN === 'basico') ok('Básico: card Resultado e KPI de lucro líquido ocultos; contas e caixa continuam', !temDre && !temLucro && temAP && temCx, { temDre, temLucro, temAP, temCx });
+  if (CEN === 'basico') ok('Básico: card Resultado e KPI de lucro líquido visíveis; contas e caixa continuam', temDre && temLucro && temAP && temCx, { temDre, temLucro, temAP, temCx });
   else ok('Completo: card Resultado visível para a TI-Lidiane', temDre && temLucro && temAP && temCx, { temDre, temLucro });
   await pg.goto(URL + '/#painel'); await wait(600);
   const menu = await pg.locator('#snav').innerText();

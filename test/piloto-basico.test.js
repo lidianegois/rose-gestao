@@ -27,7 +27,7 @@ const dataHash = (db) => PSQL(db, "select md5(string_agg(id||md5(data::text),'' 
 const userHash = (db) => PSQL(db, "select md5(string_agg(id||username||pass||pwv::text||role||coalesce(role_id,'')||active::text,'|' order by id)) from app_users");
 
 const PERFIS = ['financeiro', 'caixa_vendas', 'estoque', 'compras', 'consulta', 'gerente_atual', 'caixa_atual'];
-const FORA = ['financeiro.dre', 'analise.ver', 'financeiro.solicitar_pagamento', 'aprovacao.ver', 'aprovacao.aprovar', 'aprovacao.config', 'backup.restaurar', 'dados.apagar'];
+const FORA = ['analise.ver', 'financeiro.solicitar_pagamento', 'aprovacao.ver', 'aprovacao.aprovar', 'aprovacao.config', 'backup.restaurar', 'dados.apagar'];
 
 (async () => {
   /* ======== CENÁRIO BÁSICO ======== */
@@ -99,9 +99,9 @@ const FORA = ['financeiro.dre', 'analise.ver', 'financeiro.solicitar_pagamento',
   }
   /* concessão forçada de permissões fora do plano e do Histórico a outro perfil */
   const uids = (await R('GET', '/api/usuarios')).j.users; const fin = uids.find((u) => u.username === 'u_financeiro');
-  const gr = await R('PATCH', '/api/usuarios/' + fin.id, { conceder: ['auditoria.ver', 'dados.apagar', 'backup.restaurar', 'analise.ver', 'financeiro.dre', 'usuarios.gerir'] });
+  const gr = await R('PATCH', '/api/usuarios/' + fin.id, { conceder: ['auditoria.ver', 'dados.apagar', 'backup.restaurar', 'analise.ver', 'usuarios.gerir'] });
   const finC = api(await login('u_financeiro', 'senha-financeiro-123')), finM = (await finC('GET', '/api/me')).j.user;
-  ok('concessões fora do plano não têm efeito (Histórico, apagar, restaurar, análise, DRE, usuários)', gr.s === 200 && ['auditoria.ver', 'dados.apagar', 'backup.restaurar', 'analise.ver', 'financeiro.dre', 'usuarios.gerir'].every((x) => !finM.perm.includes(x)), finM.perm.filter((x) => ['auditoria.ver', 'dados.apagar', 'backup.restaurar', 'analise.ver', 'financeiro.dre', 'usuarios.gerir'].includes(x)));
+  ok('concessões fora do plano não têm efeito (Histórico, apagar, restaurar, análise, usuários)', gr.s === 200 && ['auditoria.ver', 'dados.apagar', 'backup.restaurar', 'analise.ver', 'usuarios.gerir'].every((x) => !finM.perm.includes(x)), finM.perm.filter((x) => ['auditoria.ver', 'dados.apagar', 'backup.restaurar', 'analise.ver', 'usuarios.gerir'].includes(x)));
   ok('perfil com concessão forçada continua sem Histórico por URL e API', (await page(await login('u_financeiro', 'senha-financeiro-123'), '/historico')) === 303 && (await finC('GET', '/api/historico')).s === 403 && (await finC('DELETE', '/api/col/loja/cadastros')).s === 403);
   /* escopo por perfil: nota e financeiro */
   ok('Estoque e Compras importam nota (permissão notas.editar); Caixa/Vendas não', (await batch(C.estoque.c, { 'notas-2026-11': [put('items', { ...nova, id: 'n3', num: '4523' })] })).s === 200 && (await batch(C.caixa_vendas.c, { 'notas-2026-11': [put('items', { ...nova, id: 'n4', num: '4524' })] })).s === 403);
@@ -110,7 +110,7 @@ const FORA = ['financeiro.dre', 'analise.ver', 'financeiro.solicitar_pagamento',
   const mg = (await C.gerente_atual.c('GET', '/api/me')).j.user;
   ok('Gerente (atual) no Básico perde as que são só da administradora (usuários, configuração, excluir nota)', !mg.perm.includes('usuarios.gerir') && !mg.perm.includes('config.editar') && !mg.perm.includes('notas.excluir') && mg.perm.includes('notas.editar') && mg.perm.includes('financeiro.baixar'), mg.perm.length);
   ok('Gerente (atual): gerenciar usuários por API negado', (await C.gerente_atual.c('GET', '/api/usuarios')).s === 403 && (await page(C.gerente_atual.ck, '/usuarios')) === 303);
-  ok('Financeiro: tudo do financeiro essencial, sem DRE', finM.perm.includes('financeiro.baixar') && finM.perm.includes('financeiro.lancar') && !finM.perm.includes('financeiro.dre'));
+  ok('Financeiro: tudo do financeiro essencial, com DRE', finM.perm.includes('financeiro.baixar') && finM.perm.includes('financeiro.lancar') && finM.perm.includes('financeiro.dre'));
   /* o histórico registrou a concessão e a gravação da nota, com autor */
   const hv = (await R('GET', '/api/historico?limite=200')).j.items;
   ok('Histórico registra a concessão de permissões e a nota importada', hv.some((x) => x.acao === 'usuario_alterar') && hv.some((x) => /Nota fiscal/.test(x.resumo || '')), hv.slice(0, 3).map((x) => x.resumo));
